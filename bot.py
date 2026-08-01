@@ -78,8 +78,8 @@ def _keyboard_language() -> InlineKeyboardMarkup:
     """Build inline keyboard for language selection."""
     return InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("🇷🇺 Русский", callback_data="set_lang:ru", style="primary", icon_custom_emoji_id=EMOJI_RU),
-            InlineKeyboardButton("🇺🇸 English", callback_data="set_lang:en", style="primary", icon_custom_emoji_id=EMOJI_US),
+            InlineKeyboardButton("Русский", callback_data="set_lang:ru", style="primary", icon_custom_emoji_id=EMOJI_RU),
+            InlineKeyboardButton("English", callback_data="set_lang:en", style="primary", icon_custom_emoji_id=EMOJI_US),
         ]
     ])
 
@@ -88,7 +88,7 @@ def _keyboard_start(lang: str = "ru") -> InlineKeyboardMarkup:
     """Build start command inline keyboard containing Help and Settings buttons."""
     return InlineKeyboardMarkup([
         [
-            InlineKeyboardButton(get_text(lang, "btn_help"), callback_data="help", style="primary", icon_custom_emoji_id=EMOJI_GEAR),
+            InlineKeyboardButton(get_text(lang, "btn_help"), callback_data="help", style="primary", icon_custom_emoji_id=EMOJI_HISTORY),
             InlineKeyboardButton(get_text(lang, "btn_settings"), callback_data="settings", style="primary", icon_custom_emoji_id=EMOJI_GEAR),
         ]
     ])
@@ -1405,4 +1405,4 @@ if __name__ == "__main__":
     try:
         MAIN_LOOP.run_until_complete(main())
     finally:
-        MAIN_LOOP.close()
+        MAIN_LOOP.close()
