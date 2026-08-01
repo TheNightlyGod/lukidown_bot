@@ -1,0 +1,13 @@
+kurigram
+TgCrypto
+yt-dlp
+aiohttp
+aiofiles
+python-dotenv
+Pillow
+mutagen
+SQLAlchemy
+asyncpg
+redis
+httpx[socks]
+playwright
