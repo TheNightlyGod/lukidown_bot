@@ -113,29 +113,30 @@ async def compress_video(
     if duration <= 0:
         duration = 5400.0
 
-    safety_target_bytes = int(max_size_bytes * 0.95)
+    safety_target_bytes = int(max_size_bytes * 0.92)
     total_bitrate_bps = (safety_target_bytes * 8) / duration
     audio_bitrate_bps = 128_000.0
-    video_bitrate_bps = max(100_000.0, total_bitrate_bps - audio_bitrate_bps)
+    video_bitrate_bps = max(150_000.0, total_bitrate_bps - audio_bitrate_bps)
 
     v_bitrate_k = int(video_bitrate_bps / 1000.0)
-    maxrate_k = int(v_bitrate_k * 1.5)
+    maxrate_k = int(v_bitrate_k * 1.4)
     bufsize_k = int(v_bitrate_k * 2)
 
-    vf_scale = "scale=-2:'min(720,ih)'"
+    vf_scale = "scale=-2:'min(720,ih)':flags=bilinear"
 
     cmd = [
         "ffmpeg",
         "-y",
         "-i", str(input_path),
         "-c:v", "libx264",
-        "-preset", "medium",
+        "-preset", "ultrafast",
         "-b:v", f"{v_bitrate_k}k",
         "-maxrate", f"{maxrate_k}k",
         "-bufsize", f"{bufsize_k}k",
         "-vf", vf_scale,
-        "-c:a", "aac",
-        "-b:a", "128k",
+        "-c:a", "copy",
+        "-movflags", "+faststart",
+        "-threads", "0",
         "-progress", "pipe:1",
         str(output_path),
     ]
