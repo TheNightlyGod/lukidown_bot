@@ -32,12 +32,12 @@ STRINGS: dict[str, dict[str, str]] = {
             "2. Выбери нужный формат (**Видео** или **Аудио**) и качество.\n"
             "3. Бот добавит задачу в очередь и пришлёт готовый файл!\n\n"
             "**Доступные команды:**\n"
-            "• `/start` - Перезапуск бота\n"
-            "• `/settings` - Настройки языка\n"
-            "• `/help` - Инструкция и справка\n"
-            "• `/saves` - Твои сохранённые медиафайлы\n"
-            "• `/queue` - Список задач в очереди\n"
-            "• `/cancel` - Отмена текущей загрузки"
+            "• /start - Перезапуск бота\n"
+            "• /settings - Настройки языка\n"
+            "• /help - Инструкция и справка\n"
+            "• /saves - Твои сохранённые медиафайлы\n"
+            "• /queue - Список задач в очереди\n"
+            "• /cancel - Отмена текущей загрузки"
         ),
         "queue_empty": "В очереди нет активных или ожидающих задач.",
         "queue_header": "Твоя очередь загрузок:",
@@ -53,8 +53,8 @@ STRINGS: dict[str, dict[str, str]] = {
         "saves_empty": "Здесь появятся последние сохранённые файлы.",
         "saves_header": "Твои последние {limit} сохранений:",
         "search_usage": (
-            "Использование:\n`/search Название\nАвтор`\n"
-            "или `/search Автор - Название`"
+            "Использование:\n```/search Название\nАвтор```\n"
+            "или ```/search Автор - Название```"
         ),
         "select_audio_format": "Выбери формат аудио:",
         "select_format": "Выбери формат:",
@@ -135,12 +135,12 @@ STRINGS: dict[str, dict[str, str]] = {
             "2. Choose your preferred format (**Video** or **Audio**) and quality.\n"
             "3. The bot will add the task to the queue and send the file!\n\n"
             "**Available commands:**\n"
-            "• `/start` - Restart the bot\n"
-            "• `/settings` - Language settings\n"
-            "• `/help` - Instructions and help\n"
-            "• `/saves` - Your saved media files\n"
-            "• `/queue` - List queued tasks\n"
-            "• `/cancel` - Cancel active download"
+            "• /start - Restart the bot\n"
+            "• /settings - Language settings\n"
+            "• /help - Instructions and help\n"
+            "• /saves - Your saved media files\n"
+            "• /queue - List queued tasks\n"
+            "• /cancel - Cancel active download"
         ),
         "queue_empty": "There are no active or pending tasks in your queue.",
         "queue_header": "Your download queue:",
@@ -156,8 +156,8 @@ STRINGS: dict[str, dict[str, str]] = {
         "saves_empty": "Your recent saved files will appear here.",
         "saves_header": "Your last {limit} saves:",
         "search_usage": (
-            "Usage:\n`/search Title\nArtist`\n"
-            "or `/search Artist - Title`"
+            "Usage:\n```/search Title\nArtist```\n"
+            "or ```/search Artist - Title```"
         ),
         "select_audio_format": "Select audio format:",
         "select_format": "Select format:",
