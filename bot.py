@@ -289,7 +289,7 @@ async def _probe_video_metadata(filepath: Path) -> tuple[int, int, int]:
                     duration = int(float(data["format"].get("duration", 0)))
                 except (ValueError, TypeError):
                     pass
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         log.warning("ffprobe metadata extraction failed for %s: %s", filepath, e)
     return width, height, duration
 
@@ -345,7 +345,7 @@ async def _ensure_video_info(filepath: Path, result) -> tuple[int, int, int, Pat
                     thumb_path = gen_thumb
                     if hasattr(result, "thumbnail"):
                         result.thumbnail = gen_thumb
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 log.warning("Failed to generate video thumbnail for %s: %s", filepath, e)
 
     return width, height, duration, thumb_path
@@ -423,29 +423,30 @@ async def _store_inline_cache(user_id: int, media_key: str, result, want_audio: 
                 source_url=url,
             )
             await media_service.storage.add_history(user_id, media_key)
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         log.warning("Inline cache persistence failed: %s", e)
     finally:
         if shadow_message is not None:
             try:
                 await shadow_message.delete()
-            except Exception:
-                pass
+            except Exception as e:  # noqa: BLE001
+                log.debug("Failed to delete shadow message: %s", e)
+
 
 async def _safe_edit(msg: Message, text: str, reply_markup=None):
     """Edit message text safely ignoring exceptions."""
     try:
         await msg.edit_text(text, parse_mode=ParseMode.MARKDOWN, reply_markup=reply_markup)
-    except Exception:
-        pass
+    except Exception as e:  # noqa: BLE001
+        log.debug("Failed to edit text safely: %s", e)
 
 
 async def _safe_delete(msg: Message):
     """Delete message safely ignoring exceptions."""
     try:
         await msg.delete()
-    except Exception:
-        pass
+    except Exception as e:  # noqa: BLE001
+        log.debug("Failed to delete message safely: %s", e)
 
 
 def _parse_search_query(text: str):
@@ -555,7 +556,7 @@ async def send_result(chat_id: int, result, status_msg: Message, url: str | None
                 kwargs["thumb"] = thumb_path
             sent_message = await app.send_document(**kwargs)
             media_type = "document"
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         log.warning("send as media failed, fallback to document: %s", e)
         sent_message = await app.send_document(
             chat_id,
@@ -652,7 +653,6 @@ async def _process_queued_download(task: QueueTask):
         return
 
     last_progress = [""]
-    loop = asyncio.get_running_loop()
 
     async def on_progress(text: str):
         if text != last_progress[0]:
@@ -712,8 +712,8 @@ async def _process_queued_download(task: QueueTask):
         await _safe_edit(status_msg, get_text(user_lang, "cancel_done"))
     except FileTooLarge:
         await _safe_edit(status_msg, get_text(user_lang, "file_too_large", limit=config.MAX_FILE_SIZE_MB))
-    except Exception as e:
-        log.exception("download failed for task %s: %s", task.task_id, e)
+    except Exception:
+        log.exception("download failed for task %s", task.task_id)
         await _safe_edit(status_msg, get_text(user_lang, "download_error"))
 
     finally:
@@ -950,7 +950,7 @@ async def handle_url(client: Client, msg: Message):
         status_msg = await msg.reply_text(get_text(lang, "kinopoisk_fetching"))
         try:
             info = await fetch_kinopoisk_info(url)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             log.warning("Kinopoisk fetch_kinopoisk_info error: %s", e)
             await status_msg.edit_text(get_text(lang, "kinopoisk_error"))
             return
@@ -1267,8 +1267,13 @@ async def on_inline_query(client, iq):
             )
         )
 
-    if not search_q:
-        if platform not in (Platform.SPOTIFY, Platform.SHAZAM, Platform.YANDEX, Platform.SOUNDCLOUD, Platform.VK_MUSIC):
+    if not search_q and platform not in (
+        Platform.SPOTIFY,
+        Platform.SHAZAM,
+        Platform.YANDEX,
+        Platform.SOUNDCLOUD,
+        Platform.VK_MUSIC,
+    ):
             for q, label in VIDEO_QUALITIES.items():
                 keyboard = InlineKeyboardMarkup([[InlineKeyboardButton(get_text(user_lang, "download_inline"), callback_data="ignore", style=ButtonStyle.PRIMARY, icon_custom_emoji_id=EMOJI_LOADING)]])
                 display_text = get_text(user_lang, "download_video_fmt", label=label)
@@ -1336,17 +1341,16 @@ async def on_chosen_inline_result(client: Client, chosen: ChosenInlineResult):
     )
 
     cached = await media_service.storage.get_cache(media_key)
-    if cached:
-        if (want_audio and cached.media_type == "audio") or (is_video and cached.media_type == "video"):
-            try:
-                await client.edit_inline_media(
-                    inline_message_id=chosen.inline_message_id,
-                    media=_cached_inline_media(cached, lang=user_lang),
-                )
-                await media_service.storage.add_history(chosen.from_user.id, media_key)
-                return
-            except Exception as e:
-                log.warning("Inline cache send failed, fallback to download: %s", e)
+    if cached and ((want_audio and cached.media_type == "audio") or (is_video and cached.media_type == "video")):
+        try:
+            await client.edit_inline_media(
+                inline_message_id=chosen.inline_message_id,
+                media=_cached_inline_media(cached, lang=user_lang),
+            )
+            await media_service.storage.add_history(chosen.from_user.id, media_key)
+            return
+        except Exception as e:  # noqa: BLE001
+            log.warning("Inline cache send failed, fallback to download: %s", e)
 
     try:
         result = await download(
@@ -1388,7 +1392,7 @@ async def on_chosen_inline_result(client: Client, chosen: ChosenInlineResult):
         await _store_inline_cache(chosen.from_user.id, media_key, result, want_audio, afmt, vfmt, url=url)
         cleanup(result)
 
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         log.error("Inline error %s", e)
         await client.edit_inline_text(
             inline_message_id=chosen.inline_message_id,
