@@ -38,10 +38,10 @@ ProgressCallback = Callable[[str], Awaitable[None]]
 CancelCheck = Callable[[], bool]
 
 AUDIO_FORMATS = {
-    "flac": {"codec": "flac", "quality": "0", "ext": ".flac", "label": "FLAC (lossless)"},
-    "m4a": {"codec": "m4a", "quality": "0", "ext": ".m4a", "label": "M4A / AAC"},
-    "mp3_320": {"codec": "mp3", "quality": "320", "ext": ".mp3", "label": "MP3 / 320 kbps"},
-    "mp3_192": {"codec": "mp3", "quality": "192", "ext": ".mp3", "label": "MP3 / 192 kbps"},
+    "flac": {"codec": "flac", "quality": "0", "ext": ".flac", "label": "FLAC (lossless)", "emoji": "5458806371250105072"},
+    "m4a": {"codec": "m4a", "quality": "0", "ext": ".m4a", "label": "M4A / AAC", "emoji": "5364257510951762757"},
+    "mp3_320": {"codec": "mp3", "quality": "320", "ext": ".mp3", "label": "MP3 / 320 kbps", "emoji": "5194988065222831801"},
+    "mp3_192": {"codec": "mp3", "quality": "192", "ext": ".mp3", "label": "MP3 / 192 kbps", "emoji": "5373193336439990453"},
 }
 
 VIDEO_QUALITIES = {
