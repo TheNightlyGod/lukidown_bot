@@ -119,7 +119,7 @@ def _keyboard_video_quality(available_heights: list[int] | None = None, lang: st
         if available_heights and int(key) > max(available_heights):
             continue
         style = ButtonStyle.SUCCESS if key == "2160" else ButtonStyle.PRIMARY
-        rows.append([InlineKeyboardButton(info["label"], callback_data=f"vq:{key}", style=style, icon_custom_emoji_id=int(info[key]["emoji"]))])
+        rows.append([InlineKeyboardButton(info["label"], callback_data=f"vq:{key}", style=style, icon_custom_emoji_id=int(info["emoji"]))])
     rows.append([InlineKeyboardButton(get_text(lang, "btn_back"), callback_data="back:fmt", style=ButtonStyle.DANGER, icon_custom_emoji_id=EMOJI_BACK)])
     return InlineKeyboardMarkup(rows)
 
@@ -133,7 +133,7 @@ def _keyboard_audio_format(codecs: set[str] | None = None, show_back: bool = Tru
         if key == "flac" and not lossless_native:
             continue
         style = ButtonStyle.SUCCESS if key == "flac" else ButtonStyle.PRIMARY
-        rows.append([InlineKeyboardButton(info["label"], callback_data=f"af:{key}", style=style, icon_custom_emoji_id=int(info[key]["emoji"]))])
+        rows.append([InlineKeyboardButton(info["label"], callback_data=f"af:{key}", style=style, icon_custom_emoji_id=int(info["emoji"]))])
 
     if show_back:
         rows.append([InlineKeyboardButton(get_text(lang, "btn_back"), callback_data="back:fmt", style=ButtonStyle.DANGER, icon_custom_emoji_id=EMOJI_BACK)])
