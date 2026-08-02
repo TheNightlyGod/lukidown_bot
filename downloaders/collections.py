@@ -1,12 +1,15 @@
 """Collection and playlist batch download routines."""
 
 import asyncio
+import logging
 import shutil
 from collections.abc import Awaitable, Callable
 from pathlib import Path
 
 import httpx
 import yt_dlp
+
+logger = logging.getLogger("mediabot.collections")
 
 from downloaders.core import (
     CancelCheck,
@@ -76,7 +79,8 @@ async def _process_collection_tracks(
                 result = await download_one(track, idx, total, track_tmpdir)
             except DownloadCancelled:
                 raise
-            except Exception:
+            except Exception as e:  # noqa: BLE001
+                logger.debug("Failed to download collection track: %s", e)
                 if on_progress:
                     await on_progress(f"Skipping {track.get('title', 'Unknown')}: error occurred.")
                 shutil.rmtree(track_tmpdir, ignore_errors=True)
