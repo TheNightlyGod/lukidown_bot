@@ -9,15 +9,15 @@ DEFAULT_LANGUAGE = "ru"
 
 STRINGS: dict[str, dict[str, str]] = {
     "ru": {
-        "select_language_prompt": "🌐 **Пожалуйста, выберите язык / Please select your language:**",
-        "language_saved": "✅ Язык успешно изменён на Русский 🇷🇺",
+        "select_language_prompt": "**Пожалуйста, выберите язык / Please select your language:**",
+        "language_saved": "Язык успешно изменён на Русский 🇷🇺",
         "start_text": (
             "Пришли ссылку - скачаю.\n"
             "YouTube / TikTok / Instagram / Pinterest / Rutube / VK / Spotify / Shazam / "
             "Yandex Music / SoundCloud / VK Music / Deezer / Apple Music / Tenor / JioSaavn / "
             "Twitch(Только клипы) / Snapchat / Reddit / Kinopoisk"
         ),
-        "settings_text": "⚙️ **Настройки**\nВыберите язык:",
+        "settings_text": "**Настройки**\nВыберите язык:",
         "btn_help": "Помощь",
         "btn_settings": "Настройки",
         "btn_video": "Видео",
@@ -112,15 +112,15 @@ STRINGS: dict[str, dict[str, str]] = {
         "dl_format_converted": "Запрошенный формат недоступен, конвертирую из лучшего доступного...",
     },
     "en": {
-        "select_language_prompt": "🌐 **Please select your language / Пожалуйста, выберите язык:**",
-        "language_saved": "✅ Language successfully set to English 🇺🇸",
+        "select_language_prompt": "**Please select your language / Пожалуйста, выберите язык:**",
+        "language_saved": "Language successfully set to English 🇺🇸",
         "start_text": (
             "Send a link - I will download it.\n"
             "YouTube / TikTok / Instagram / Pinterest / Rutube / VK / Spotify / Shazam / "
             "Yandex Music / SoundCloud / VK Music / Deezer / Apple Music / Tenor / JioSaavn / "
             "Twitch(Clips only) / Snapchat / Reddit / Kinopoisk"
         ),
-        "settings_text": "⚙️ **Settings**\nSelect your language:",
+        "settings_text": "**Settings**\nSelect your language:",
         "btn_help": "Help",
         "btn_settings": "Settings",
         "btn_video": "Video",
