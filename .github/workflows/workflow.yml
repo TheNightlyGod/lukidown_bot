@@ -2,8 +2,7 @@ name: Docker CI/CD with Linting
 
 on:
   push:
-    branches: [ "main" ]
-    tags: [ 'v*.*.*' ]
+    branches: [ "latest" ]
 
 env:
   REGISTRY: ghcr.io
