@@ -11,6 +11,7 @@ from downloaders.core import (
     ProgressCallback,
     _human_size,
 )
+from i18n import get_text
 
 log = logging.getLogger("mediabot.transcoder")
 
@@ -37,11 +38,11 @@ async def get_video_duration(filepath: Path) -> float:
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        stdout, stderr = await proc.communicate()
+        stdout, _stderr = await proc.communicate()
         if proc.returncode == 0 and stdout:
             val = stdout.decode().strip()
             return float(val)
-    except Exception as e:
+    except (OSError, ValueError, RuntimeError, asyncio.SubprocessError) as e:
         log.warning("ffprobe get_video_duration error for %s: %s", filepath, e)
     return 0.0
 
@@ -74,8 +75,8 @@ async def get_video_bitrate(filepath: Path) -> int:
             val = stdout.decode().strip()
             if val.isdigit():
                 return int(val) // 1000
-    except Exception:
-        pass
+    except (OSError, ValueError, RuntimeError, asyncio.SubprocessError) as e:
+        log.debug("ffprobe get_video_bitrate error for %s: %s", filepath, e)
     return 0
 
 
