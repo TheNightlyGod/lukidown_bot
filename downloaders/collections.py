@@ -2,20 +2,22 @@
 
 import asyncio
 import shutil
+from collections.abc import Awaitable, Callable
 from pathlib import Path
-from typing import Callable, Awaitable
+
 import httpx
+import yt_dlp
+
 from downloaders.core import (
+    CancelCheck,
     DownloadCancelled,
     DownloadResult,
     ProgressCallback,
-    CancelCheck,
-    _safe_filename,
     _base_ydl_opts,
+    _safe_filename,
     download_ytdlp,
 )
 from downloaders.http import get_http_client
-import yt_dlp
 
 
 async def _download_cover(cover_url: str, dest: Path) -> None:

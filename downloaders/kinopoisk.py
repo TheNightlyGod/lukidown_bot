@@ -6,17 +6,18 @@ import json
 import re
 import time
 from pathlib import Path
-from urllib.parse import urlparse, parse_qs
-import httpx
-from playwright.async_api import async_playwright, Browser, Playwright
+from urllib.parse import parse_qs, urlparse
+
+from playwright.async_api import Browser, Playwright, async_playwright
+
 from config import config
 from downloaders.core import (
-    DownloadResult,
-    DownloadCancelled,
-    ProgressCallback,
     CancelCheck,
-    _safe_filename,
+    DownloadCancelled,
+    DownloadResult,
+    ProgressCallback,
     _human_size,
+    _safe_filename,
 )
 from downloaders.http import get_http_client
 
@@ -471,6 +472,7 @@ async def extract_kinopoisk_stream(
     }
 
 from i18n import get_text
+
 
 async def download_kinopoisk(
     url: str,

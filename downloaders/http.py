@@ -1,7 +1,9 @@
 """HTTP client management for async network requests with optional SOCKS5 proxy support."""
 
 import asyncio
+
 import httpx
+
 from config import config
 
 _http_client_with_proxy: httpx.AsyncClient | None = None

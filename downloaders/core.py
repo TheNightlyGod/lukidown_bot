@@ -2,17 +2,17 @@
 
 import asyncio
 import re
-import subprocess
-import tempfile
 import time
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, Awaitable
+
 import yt_dlp
-from mutagen.mp3 import MP3
-from mutagen.id3 import ID3, APIC
 from mutagen.flac import FLAC, Picture
+from mutagen.id3 import APIC, ID3
+from mutagen.mp3 import MP3
 from mutagen.mp4 import MP4, MP4Cover
+
 from config import config
 from downloaders.http import get_http_client
 
@@ -56,13 +56,11 @@ VIDEO_QUALITIES = {
 class DownloadCancelled(RuntimeError):
     """Raised when a download operation is cancelled by the user."""
 
-    pass
 
 
 class FileTooLarge(RuntimeError):
     """Raised when the requested media exceeds the maximum configured size limit."""
 
-    pass
 
 
 def _safe_filename(name: str) -> str:

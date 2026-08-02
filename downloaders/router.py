@@ -4,33 +4,34 @@ import asyncio
 import shutil
 import tempfile
 from pathlib import Path
-from platforms import Platform
+
 from config import config
+from downloaders.collections import download_ytdlp_playlist
 from downloaders.core import (
-    DownloadResult,
-    ProgressCallback,
     CancelCheck,
+    DownloadResult,
     FileTooLarge,
+    ProgressCallback,
     _ensure_dir,
     _human_size,
-    download_ytdlp,
-    download_simple,
-    download_reddit,
-    download_tenor,
+    download_apple_music,
+    download_deezer,
     download_jiosaavn,
-    download_twitch,
+    download_pinterest,
+    download_reddit,
     download_snapchat,
+    download_tenor,
+    download_twitch,
+    download_ytdlp,
 )
-from downloaders.collections import download_ytdlp_playlist
-from downloaders.spotify import download_spotify
-from downloaders.yandex import download_yandex, download_yandex_playlist
-from downloaders.vk_music import download_vk_music
 from downloaders.kinopoisk import download_kinopoisk
-from downloaders.core import download_deezer, download_apple_music, download_pinterest
+from downloaders.spotify import download_spotify
 from downloaders.transcoder import compress_video
-
-
+from downloaders.vk_music import download_vk_music
+from downloaders.yandex import download_yandex, download_yandex_playlist
 from i18n import get_text
+from platforms import Platform
+
 
 async def download(
         url: str | None,
@@ -126,6 +127,7 @@ async def download(
                 is_playlist = False
                 try:
                     import yt_dlp
+
                     from downloaders.core import _base_ydl_opts
                     loop = asyncio.get_event_loop()
                     ydl_opts_flat = {
