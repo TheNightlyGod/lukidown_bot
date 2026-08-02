@@ -353,7 +353,7 @@ async def _ensure_video_info(filepath: Path, result) -> tuple[int, int, int, Pat
 def _requested_format_label(*, want_audio: bool, audio_format: str, video_quality: str) -> str:
     if want_audio:
         return AUDIO_FORMATS.get(audio_format, {}).get("label", audio_format)
-    return VIDEO_QUALITIES.get(video_quality, f"{video_quality}p")
+    return VIDEO_QUALITIES.get(video_quality, {}).get("label", f"{video_quality}p")
 
 def _cached_inline_media(entry: CacheEntry, lang: str = "ru") -> InputMediaAudio | InputMediaVideo:
     if entry.media_type == "video":
@@ -1067,7 +1067,7 @@ async def cb_video_quality(client: Client, cq: CallbackQuery):
 
     quality = cq.data.split(":")[1]
     await cq.answer()
-    adding_msg = get_text(lang, "adding_video_queue", quality=VIDEO_QUALITIES[quality])
+    adding_msg = get_text(lang, "adding_video_queue", quality=VIDEO_QUALITIES[quality]["label"])
     await cq.message.edit_text(adding_msg)
 
     await _enqueue_download(
@@ -1274,16 +1274,16 @@ async def on_inline_query(client, iq):
         Platform.SOUNDCLOUD,
         Platform.VK_MUSIC,
     ):
-            for q, label in VIDEO_QUALITIES.items():
+            for q, info in VIDEO_QUALITIES.items():
                 keyboard = InlineKeyboardMarkup([[InlineKeyboardButton(get_text(user_lang, "download_inline"), callback_data="ignore", style=ButtonStyle.PRIMARY, icon_custom_emoji_id=EMOJI_LOADING)]])
-                display_text = get_text(user_lang, "download_video_fmt", label=label)
+                display_text = get_text(user_lang, "download_video_fmt", label=info["label"])
                 results.append(
                     InlineQueryResultArticle(
                         id=get_stable_id(query, f"vf_{q}"),
-                        title=label,
+                        title=info["label"],
                         description=display_text,
                         input_message_content=InputTextMessageContent(
-                            get_text(user_lang, "download_inline_status", query=query, fmt=f"Video {label}")
+                            get_text(user_lang, "download_inline_status", query=query, fmt=f"Video {info["label"]}")
                         ),
                         reply_markup=keyboard,
                     )
