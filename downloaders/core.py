@@ -439,7 +439,7 @@ async def download_ytdlp(
     media_file = next((f for f in files if f.suffix.lower() in media_exts), None)
     if thumb_url:
         thumb_path = tmpdir / "thumbnail.jpg"
-        client = await get_http_client()
+        client = await get_http_client(enable_proxy=False)
         resp = await client.get(thumb_url, timeout=30.0, follow_redirects=True)
         thumb_path.write_bytes(resp.content)
         thumb_file = thumb_path
@@ -619,7 +619,7 @@ async def download_pinterest(
     except Exception as e:  # noqa: BLE001
         log.debug("Pinterest download_ytdlp failed, trying fallback: %s", e)
     img_url = None
-    client = await get_http_client()
+    client = await get_http_client(enable_proxy=False)
     resp = await client.get(url, timeout=30.0, follow_redirects=True)
     html_text = resp.text
     for pattern in [
