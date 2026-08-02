@@ -1,13 +1,11 @@
 """Telegram bot interface, command handlers, and inline query callbacks."""
 
 import asyncio
-import concurrent.futures
 import hashlib
 import json
 import logging
 import re
 from pathlib import Path
-from health import init as health_init, start_health_server
 
 from pyrogram import Client, filters, idle
 from pyrogram.enums import ButtonStyle, ParseMode
@@ -25,10 +23,19 @@ from pyrogram.types import (
 
 from config import config
 from downloaders import (
-    AUDIO_FORMATS, VIDEO_QUALITIES, DownloadCancelled, FileTooLarge,
-    cleanup, download, get_available_audio_codecs, get_available_video_heights,
-    fetch_kinopoisk_info, list_episodes,
+    AUDIO_FORMATS,
+    VIDEO_QUALITIES,
+    DownloadCancelled,
+    FileTooLarge,
+    cleanup,
+    download,
+    fetch_kinopoisk_info,
+    get_available_audio_codecs,
+    get_available_video_heights,
+    list_episodes,
 )
+from health import init as health_init
+from health import start_health_server
 from i18n import EMOJI_RU, EMOJI_US, get_text
 from platforms import Platform, detect_platform, extract_url
 from services import CacheEntry, QueueTask, media_service
@@ -703,7 +710,7 @@ async def _process_queued_download(task: QueueTask):
     except DownloadCancelled:
         await media_service.queue.clear_cancel(task.user_id)
         await _safe_edit(status_msg, get_text(user_lang, "cancel_done"))
-    except FileTooLarge as e:
+    except FileTooLarge:
         await _safe_edit(status_msg, get_text(user_lang, "file_too_large", limit=config.MAX_FILE_SIZE_MB))
     except Exception as e:
         log.exception("download failed for task %s: %s", task.task_id, e)

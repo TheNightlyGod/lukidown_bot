@@ -3,11 +3,11 @@
 from downloaders.core import (
     AUDIO_FORMATS,
     VIDEO_QUALITIES,
+    CancelCheck,
     DownloadCancelled,
     DownloadResult,
     FileTooLarge,
     ProgressCallback,
-    CancelCheck,
     get_available_audio_codecs,
     get_available_video_heights,
 )

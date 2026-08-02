@@ -8,15 +8,17 @@ import threading
 import time
 from pathlib import Path
 from urllib.parse import urlparse
+
 import httpx
-from downloaders.http import get_http_client
+
+from downloaders.collections import _process_collection_tracks
 from downloaders.core import (
+    CancelCheck,
     DownloadResult,
     ProgressCallback,
-    CancelCheck,
     _download_track_search,
 )
-from downloaders.collections import _process_collection_tracks
+from downloaders.http import get_http_client
 
 log = logging.getLogger("mediabot.spotify")
 

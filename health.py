@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+
 from aiohttp import web
 
 log = logging.getLogger("mediabot.health")
@@ -62,7 +63,8 @@ async def _check_downloader() -> tuple[str, dict]:
         A tuple containing (status_str, details_dict).
     """
     try:
-        import subprocess, shutil
+        import shutil
+        import subprocess
 
         ytdlp = shutil.which("yt-dlp")
         if ytdlp is None:

@@ -6,13 +6,24 @@ import asyncio
 import hashlib
 import json
 import logging
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Awaitable, Callable
+from typing import Any
 
 from redis.asyncio import Redis
 from redis.exceptions import TimeoutError as RedisTimeoutError
-from sqlalchemy import BigInteger, DateTime, ForeignKey, Integer, String, Text, desc, select, text
+from sqlalchemy import (
+    BigInteger,
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    desc,
+    select,
+    text,
+)
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -35,7 +46,6 @@ PENDING_TTL_SECONDS = 30 * 60
 class Base(DeclarativeBase):
     """Base class for SQLAlchemy declarative ORM models."""
 
-    pass
 
 
 class MediaCache(Base):
@@ -148,7 +158,7 @@ class QueueTask:
         }
 
     @classmethod
-    def from_payload(cls, payload: dict[str, Any]) -> "QueueTask":
+    def from_payload(cls, payload: dict[str, Any]) -> QueueTask:
         """Instantiate QueueTask object from dictionary payload."""
         return cls(**payload)
 

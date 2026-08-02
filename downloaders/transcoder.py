@@ -1,13 +1,16 @@
 """Video transcoding and FFmpeg compression utilities."""
 
 import asyncio
-import json
 import logging
-import re
 import time
 from pathlib import Path
 
-from downloaders.core import CancelCheck, DownloadCancelled, ProgressCallback, _human_size
+from downloaders.core import (
+    CancelCheck,
+    DownloadCancelled,
+    ProgressCallback,
+    _human_size,
+)
 
 log = logging.getLogger("mediabot.transcoder")
 

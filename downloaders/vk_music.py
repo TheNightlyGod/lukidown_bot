@@ -1,17 +1,19 @@
 """VK Music downloader module interacting with VK API method endpoints."""
 
-import re
 import json
+import re
 from pathlib import Path
+
 import httpx
-from downloaders.http import get_http_client
+
+from downloaders.collections import _process_collection_tracks
 from downloaders.core import (
+    CancelCheck,
     DownloadResult,
     ProgressCallback,
-    CancelCheck,
     _download_track_search,
 )
-from downloaders.collections import _process_collection_tracks
+from downloaders.http import get_http_client
 
 VK_API_URL = "https://api.vk.com/method"
 VK_CLIENT_ID = "6287487"
