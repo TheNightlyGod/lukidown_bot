@@ -99,12 +99,10 @@ def _base_ydl_opts() -> dict:
         "no_warnings": True,
         "noplaylist": True,
         "remote_components": ["ejs:github"],
-        "http_headers": {
-            "User-Agent": (
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/120.0.0.0 Safari/537.36"
-            )
+        "extractor_args": {
+            "youtube": {
+                "player_client": ["android", "web", "mweb", "ios"],
+            }
         },
     }
     cookie_path = Path("cookies.txt")
@@ -378,7 +376,7 @@ async def download_ytdlp(
             "-metadata", "purl=",
         ]
     max_bytes = config.MAX_FILE_SIZE_MB * 1024 * 1024
-    is_search = url.startswith(("ytsearch", "gvsearch", "yvsearch", "scsearch"))
+    is_search = url.startswith(("ytsearch", "ytmusicsearch", "gvsearch", "yvsearch", "scsearch"))
     common_opts = {
         **_base_ydl_opts(),
         "outtmpl": str(tmpdir / "%(id)s.%(ext)s"),
@@ -448,6 +446,10 @@ async def download_ytdlp(
                 raise RuntimeError(str(e2)) from e2
     if not info:
         raise RuntimeError("yt-dlp returned no info")
+    if is_search:
+        search_entries = [e for e in info.get("entries", []) if e] if isinstance(info, dict) else []
+        if not search_entries:
+            raise RuntimeError(f"Search query returned no results for {url!r}")
     media_exts = {".mp4", ".mkv", ".webm", ".mp3", ".m4a", ".ogg", ".flac", ".wav"}
     img_exts = {".jpg", ".jpeg", ".png", ".webp"}
     files = sorted(tmpdir.iterdir(), key=lambda f: f.stat().st_size, reverse=True)
@@ -471,7 +473,7 @@ async def download_ytdlp(
         raise RuntimeError("no media file after download")
 
     entry_info = info
-    if info.get("_type") == "playlist" and info.get("entries"):
+    if isinstance(info, dict) and info.get("_type") == "playlist" and info.get("entries"):
         entries = [e for e in info["entries"] if e]
         if entries:
             entry_info = entries[0]
@@ -549,18 +551,40 @@ async def _download_track_search(
         thumb_url: str | None = None,
         should_cancel: CancelCheck | None = None,
 ) -> DownloadResult:
-    """Download audio track by querying YouTube search with artist and title."""
-    return await download_ytdlp(
+    """Download audio track by querying YouTube / YouTube Music search with fallbacks."""
+    clean_title = re.sub(r"\s*[\(\[\{].*?[\)\]\}]\s*", " ", title).strip() or title
+    search_queries = [
         f"ytsearch1:{artist} - {title}",
-        want_audio=True,
-        tmpdir=tmpdir,
-        on_progress=on_progress,
-        audio_format=audio_format,
-        music_artist=artist,
-        music_title=title,
-        thumb_url=thumb_url,
-        should_cancel=should_cancel,
-    )
+        f"ytmusicsearch1:{artist} - {title}",
+        f"ytsearch1:{artist} {clean_title}",
+        f"ytsearch1:{clean_title}",
+    ]
+    last_err: Exception | None = None
+    for q in search_queries:
+        try:
+            return await download_ytdlp(
+                q,
+                want_audio=True,
+                tmpdir=tmpdir,
+                on_progress=on_progress,
+                audio_format=audio_format,
+                music_artist=artist,
+                music_title=title,
+                thumb_url=thumb_url,
+                should_cancel=should_cancel,
+            )
+        except (FileTooLarge, DownloadCancelled):
+            raise
+        except Exception as e:  # noqa: BLE001
+            log.warning("Track search query %r failed: %s. Trying fallback search...", q, e)
+            last_err = e
+            for item in tmpdir.iterdir():
+                if item.is_file():
+                    try:
+                        item.unlink()
+                    except Exception:  # noqa: BLE001
+                        pass
+    raise RuntimeError(f"Could not download track '{artist} - {title}': {last_err}") from last_err
 
 
 async def download_simple(url: str, tmpdir: Path, on_progress: ProgressCallback | None = None,

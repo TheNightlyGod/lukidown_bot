@@ -175,16 +175,37 @@ async def download(
                         should_cancel=should_cancel,
                     )
         else:
-            result = await download_ytdlp(
+            search_queries = [
                 f"ytsearch1:{artist_track_name}",
-                want_audio=True,
-                tmpdir=tmpdir,
-                on_progress=on_progress,
-                audio_format=audio_format,
-                music_title=music_title,
-                music_artist=music_artist,
-                should_cancel=should_cancel,
-            )
+                f"ytmusicsearch1:{artist_track_name}",
+            ]
+            last_err = None
+            result = None
+            for q in search_queries:
+                try:
+                    result = await download_ytdlp(
+                        q,
+                        want_audio=True,
+                        tmpdir=tmpdir,
+                        on_progress=on_progress,
+                        audio_format=audio_format,
+                        music_title=music_title,
+                        music_artist=music_artist,
+                        should_cancel=should_cancel,
+                    )
+                    break
+                except (FileTooLarge, DownloadCancelled):
+                    raise
+                except Exception as e:  # noqa: BLE001
+                    last_err = e
+                    for item in tmpdir.iterdir():
+                        if item.is_file():
+                            try:
+                                item.unlink()
+                            except Exception:  # noqa: BLE001
+                                pass
+            if not result:
+                raise RuntimeError(f"Search failed: {last_err}") from last_err
     except Exception:
         shutil.rmtree(tmpdir, ignore_errors=True)
         raise
