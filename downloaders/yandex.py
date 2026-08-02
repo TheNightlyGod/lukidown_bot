@@ -16,7 +16,7 @@ from downloaders.core import (
 from downloaders.http import get_http_client
 
 
-async def _yandex_api_request(url: str, params: dict = None) -> str:
+async def _yandex_api_request(url: str, params: dict | None = None) -> str:
     """Send HTTP request to Yandex Music API and return raw response string."""
     client = await get_http_client()
     headers = {
@@ -46,8 +46,8 @@ async def _parse_yandex_api(entity_type: str, entity_id: str) -> dict:
     try:
         data = json.loads(json_data)
         return data.get("result", {})
-    except Exception as e:
-        raise RuntimeError(f"Failed to parse Yandex API response: {e}")
+    except (json.JSONDecodeError, KeyError, TypeError, ValueError) as e:
+        raise RuntimeError(f"Failed to parse Yandex API response: {e}") from e
 
 
 async def download_yandex(
@@ -100,8 +100,7 @@ async def download_yandex(
             data = await _parse_yandex_api("albums", entity_id)
             tracks = []
             for vol in data.get("volumes", []):
-                for t in vol:
-                    tracks.append(t)
+                tracks.extend(vol)
             if tracks:
                 track_data = await _parse_yandex_api("tracks", tracks[0]["id"])
                 if isinstance(track_data, list): track_data = track_data[0]
