@@ -193,7 +193,7 @@ async def get_kinopoisk_meta(kp_id: str) -> dict:
         "User-Agent": UA,
     }
     try:
-        client = await get_http_client(enable_proxy=False)
+        client = await get_http_client()
         r = await client.get(url, headers=headers, timeout=10)
         if r.status_code == 200:
             return r.json()
@@ -212,7 +212,7 @@ async def get_players(kinopoisk_id: str, retries: int = 3, delay: float = 2.0) -
     """Get player iframe endpoints for Kinopoisk content."""
     url = f"https://p.linkpp.ink/api/players?kinopoisk={kinopoisk_id}"
     last_err = None
-    client = await get_http_client(enable_proxy=False)
+    client = await get_http_client()
     for attempt in range(retries):
         try:
             r = await client.get(url, timeout=15, headers={"User-Agent": UA})
