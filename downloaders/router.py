@@ -30,6 +30,8 @@ from downloaders.core import download_deezer, download_apple_music, download_pin
 from downloaders.transcoder import compress_video
 
 
+from i18n import get_text
+
 async def download(
         url: str | None,
         platform: Platform,
@@ -44,31 +46,9 @@ async def download(
         season: int | None = None,
         episode: int | None = None,
         translation_id: int | None = None,
+        lang: str = "ru",
 ) -> DownloadResult:
-    """Route media download request to the specific platform handler.
-
-    Args:
-        url: Direct link to media item or web page.
-        platform: Platform enum member identifying the target site.
-        want_audio: True to extract audio only, False for video.
-        on_progress: Optional async callback for progress reporting.
-        audio_format: Preferred audio format/codec key.
-        video_quality: Preferred maximum video resolution height.
-        artist_track_name: Search query string if url is None.
-        music_title: Optional override for track title metadata.
-        music_artist: Optional override for artist metadata.
-        should_cancel: Optional cancellation predicate function.
-        season: Kinopoisk TV series season number.
-        episode: Kinopoisk TV series episode number.
-        translation_id: Kinopoisk audio translation ID.
-
-    Returns:
-        DownloadResult instance containing output file metadata.
-
-    Raises:
-        FileTooLarge: If media size exceeds limit even after compression attempts.
-        Exception: On download error or platform handler failure.
-    """
+    """Route media download request to the specific platform handler."""
     tmpdir = Path(tempfile.mkdtemp(dir=_ensure_dir(config.DOWNLOAD_DIR)))
     try:
         if url:
@@ -84,6 +64,7 @@ async def download(
                     season=season,
                     episode=episode,
                     translation_id=translation_id,
+                    lang=lang,
                 )
             elif platform == Platform.SPOTIFY:
                 result = await download_spotify(
@@ -207,7 +188,7 @@ async def download(
         if not result.is_audio and result.filepath and result.filepath.suffix.lower() in (".mp4", ".mkv", ".webm", ".mov", ".ts"):
             if on_progress:
                 await on_progress(
-                    f"Файл ({_human_size(result.filesize)}) превышает лимит ({config.MAX_FILE_SIZE_MB} МБ). Запускаю сжатие..."
+                    get_text(lang, "file_exceeds_limit", size=_human_size(result.filesize), limit=config.MAX_FILE_SIZE_MB)
                 )
             compressed_path = tmpdir / f"compressed_{result.filepath.name}"
             try:
@@ -217,6 +198,7 @@ async def download(
                     max_size_bytes=int(max_bytes * 0.96),
                     on_progress=on_progress,
                     should_cancel=should_cancel,
+                    lang=lang,
                 )
                 if result.filepath.exists():
                     result.filepath.unlink()

@@ -82,6 +82,7 @@ async def compress_video(
     max_size_bytes: int,
     on_progress: ProgressCallback | None = None,
     should_cancel: CancelCheck | None = None,
+    lang: str = "ru",
 ) -> Path:
     """Compress video file to fit under specified maximum byte size using FFmpeg H.264.
 
@@ -91,6 +92,7 @@ async def compress_video(
         max_size_bytes: Target file size threshold in bytes.
         on_progress: Async progress callback function.
         should_cancel: Cancellation condition check function.
+        lang: User language code ("ru" or "en").
 
     Returns:
         Path to output compressed video file (or input_path if already within limits).
@@ -108,35 +110,22 @@ async def compress_video(
         duration = 5400.0
 
     safety_target_bytes = int(max_size_bytes * 0.95)
-    target_total_bitrate = (safety_target_bytes * 8) / duration
+    total_bitrate_bps = (safety_target_bytes * 8) / duration
+    audio_bitrate_bps = 128_000.0
+    video_bitrate_bps = max(100_000.0, total_bitrate_bps - audio_bitrate_bps)
 
-    audio_bitrate_bps = 128_000
-    video_bitrate_bps = int(target_total_bitrate - audio_bitrate_bps)
-
-    if video_bitrate_bps < 250_000:
-        video_bitrate_bps = 250_000
-
-    v_bitrate_k = int(video_bitrate_bps / 1000)
-
-    orig_v_bitrate_k = await get_video_bitrate(input_path)
-    if orig_v_bitrate_k > 0 and v_bitrate_k > orig_v_bitrate_k:
-        v_bitrate_k = int(orig_v_bitrate_k * 0.85)
-    maxrate_k = int(v_bitrate_k * 1.25)
+    v_bitrate_k = int(video_bitrate_bps / 1000.0)
+    maxrate_k = int(v_bitrate_k * 1.5)
     bufsize_k = int(v_bitrate_k * 2)
 
-    vf_scale = "scale='min(1920,iw)':-2"
-    if v_bitrate_k < 800:
-        vf_scale = "scale='min(854,iw)':-2"
-    elif v_bitrate_k < 1600:
-        vf_scale = "scale='min(1280,iw)':-2"
+    vf_scale = "scale=-2:'min(720,ih)'"
 
     cmd = [
         "ffmpeg",
         "-y",
-        "-loglevel", "error",
         "-i", str(input_path),
         "-c:v", "libx264",
-        "-preset", "fast",
+        "-preset", "medium",
         "-b:v", f"{v_bitrate_k}k",
         "-maxrate", f"{maxrate_k}k",
         "-bufsize", f"{bufsize_k}k",
@@ -148,7 +137,7 @@ async def compress_video(
     ]
 
     if on_progress:
-        await on_progress(f"Запуск сжатия видео ({v_bitrate_k} kbps)...")
+        await on_progress(get_text(lang, "compression_starting", bitrate=v_bitrate_k))
 
     proc = await asyncio.create_subprocess_exec(
         *cmd,
@@ -194,7 +183,7 @@ async def compress_video(
                         last_update = now
                         curr_size = output_path.stat().st_size if output_path.exists() else 0
                         await on_progress(
-                            f"Сжатие видео: {pct:.1f}% ({_human_size(curr_size)})"
+                            get_text(lang, "compression_progress", pct=pct, size=_human_size(curr_size))
                         )
             elif line.startswith("out_time="):
                 out_time_str = line.split("=")[1].strip().split(".")[0]
@@ -203,7 +192,7 @@ async def compress_video(
                     last_update = now
                     curr_size = output_path.stat().st_size if output_path.exists() else 0
                     await on_progress(
-                        f"Сжимаю видео... {out_time_str} ({_human_size(curr_size)})"
+                        get_text(lang, "compression_working", out_time=out_time_str, size=_human_size(curr_size))
                     )
     finally:
         await stderr_task

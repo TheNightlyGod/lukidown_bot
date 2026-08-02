@@ -93,11 +93,10 @@ def _is_format_unavailable(error: Exception) -> bool:
 
 def _base_ydl_opts() -> dict:
     """Construct baseline YoutubeDL options dictionary."""
-    return {
+    opts = {
         "quiet": True,
         "no_warnings": True,
         "noplaylist": True,
-        "cookiefile": "cookies.txt",
         "remote_components": ["ejs:github"],
         "http_headers": {
             "User-Agent": (
@@ -107,6 +106,10 @@ def _base_ydl_opts() -> dict:
             )
         },
     }
+    cookie_path = Path("cookies.txt")
+    if cookie_path.exists() and cookie_path.stat().st_size > 0:
+        opts["cookiefile"] = str(cookie_path)
+    return opts
 
 
 def _progress_hook(
@@ -338,10 +341,13 @@ async def download_ytdlp(
             h = video_quality
             fmt = (
                 f"bestvideo[height<={h}][ext=mp4]+bestaudio[ext=m4a]"
-                f"/bestvideo[height<={h}][ext=mp4]+bestaudio"
+                f"/bestvideo[height<={h}]+bestaudio[ext=m4a]"
                 f"/bestvideo[height<={h}]+bestaudio"
+                f"/best[height<={h}]"
+                f"/b[height<={h}]"
                 f"/bestvideo+bestaudio"
                 f"/best"
+                f"/b"
             )
         else:
             fmt = (
@@ -350,6 +356,7 @@ async def download_ytdlp(
                 f"/bestvideo[ext=mp4]+bestaudio[ext=m4a]"
                 f"/bestvideo+bestaudio"
                 f"/best"
+                f"/b"
             )
         postprocessors = [
             {"key": "FFmpegVideoConvertor", "preferedformat": "mp4"},
@@ -400,8 +407,9 @@ async def download_ytdlp(
         if not _is_format_unavailable(e):
             raise RuntimeError(str(e)) from e
         converted = True
-        fallback_fmt = "bestaudio/best" if want_audio else "bestvideo+bestaudio/best"
+        fallback_fmt = "bestaudio/best" if want_audio else "best/b"
         fallback_opts = {**common_opts, "format": fallback_fmt}
+        fallback_opts.pop("cookiefile", None)
         if on_progress:
             await on_progress("Required format not available, converting from best available...")
         try:
@@ -409,7 +417,12 @@ async def download_ytdlp(
         except (DownloadCancelled, FileTooLarge):
             raise
         except yt_dlp.utils.DownloadError as e2:
-            raise RuntimeError(str(e2)) from e2
+            try:
+                ultimate_opts = {**common_opts, "format": "b/best"}
+                ultimate_opts.pop("cookiefile", None)
+                info = await loop.run_in_executor(None, _run, ultimate_opts)
+            except Exception:
+                raise RuntimeError(str(e2)) from e2
     if not info:
         raise RuntimeError("yt-dlp returned no info")
     media_exts = {".mp4", ".mkv", ".webm", ".mp3", ".m4a", ".ogg", ".flac", ".wav"}

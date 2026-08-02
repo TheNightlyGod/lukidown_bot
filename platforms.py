@@ -58,14 +58,14 @@ PLATFORM_PATTERNS: list[tuple[Platform, list[str]]] = [
         r"(?:https?://)?(?:www\.)?rutube\.ru/play/",
     ]),
     (Platform.VK_MUSIC, [
-        r"(?:https?://)?(?:www\.)?vk\.com/audio-?\d+_\d+",
-        r"(?:https?://)?(?:www\.)?vk\.com/music/album/",
-        r"(?:https?://)?(?:www\.)?vk\.com/music/playlist/",
+        r"(?:https?://)?(?:www\.)?vk\.ru/audio-?\d+_\d+",
+        r"(?:https?://)?(?:www\.)?vk\.ru/music/album/",
+        r"(?:https?://)?(?:www\.)?vk\.ru/music/playlist/",
     ]),
     (Platform.VK, [
-        r"(?:https?://)?(?:www\.)?vk\.com/video",
-        r"(?:https?://)?(?:www\.)?vk\.com/clip",
-        r"(?:https?://)?(?:www\.)?vk\.com/wall.*video",
+        r"(?:https?://)?(?:www\.)?vk\.ru/video",
+        r"(?:https?://)?(?:www\.)?vk\.ru/clip",
+        r"(?:https?://)?(?:www\.)?vk\.ru/wall.*video",
         r"(?:https?://)?vkvideo\.ru/",
     ]),
     (Platform.SPOTIFY, [
@@ -112,7 +112,7 @@ PLATFORM_PATTERNS: list[tuple[Platform, list[str]]] = [
 
 URL_REGEX = re.compile(
     r"https?://[^\s<>\"{}|\\^`\[\]]+"
-    r"|(?:www\.|youtu\.be|vk\.com|tiktok\.com|pin\.it)[^\s<>\"{}|\\^`\[\]]+"
+    r"|(?:www\.|youtu\.be|vk\.ru|tiktok\.com|pin\.it)[^\s<>\"{}|\\^`\[\]]+"
 )
 
 
@@ -147,4 +147,4 @@ def detect_platform(url: str) -> Platform:
         for pattern in patterns:
             if re.search(pattern, url, re.IGNORECASE):
                 return platform
-    return Platform.UNKNOWN
+    return Platform.UNKNOWN

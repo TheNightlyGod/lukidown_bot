@@ -10,7 +10,7 @@ from pathlib import Path
 from health import init as health_init, start_health_server
 
 from pyrogram import Client, filters, idle
-from pyrogram.enums import ParseMode
+from pyrogram.enums import ButtonStyle, ParseMode
 from pyrogram.types import (
     CallbackQuery,
     ChosenInlineResult,
@@ -78,8 +78,8 @@ def _keyboard_language() -> InlineKeyboardMarkup:
     """Build inline keyboard for language selection."""
     return InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("Русский", callback_data="set_lang:ru", style="primary", icon_custom_emoji_id=EMOJI_RU),
-            InlineKeyboardButton("English", callback_data="set_lang:en", style="primary", icon_custom_emoji_id=EMOJI_US),
+            InlineKeyboardButton("Русский", callback_data="set_lang:ru", style=ButtonStyle.PRIMARY, icon_custom_emoji_id=EMOJI_RU),
+            InlineKeyboardButton("English", callback_data="set_lang:en", style=ButtonStyle.PRIMARY, icon_custom_emoji_id=EMOJI_US),
         ]
     ])
 
@@ -88,8 +88,8 @@ def _keyboard_start(lang: str = "ru") -> InlineKeyboardMarkup:
     """Build start command inline keyboard containing Help and Settings buttons."""
     return InlineKeyboardMarkup([
         [
-            InlineKeyboardButton(get_text(lang, "btn_help"), callback_data="help", style="primary", icon_custom_emoji_id=EMOJI_HISTORY),
-            InlineKeyboardButton(get_text(lang, "btn_settings"), callback_data="settings", style="primary", icon_custom_emoji_id=EMOJI_GEAR),
+            InlineKeyboardButton(get_text(lang, "btn_help"), callback_data="help", style=ButtonStyle.PRIMARY, icon_custom_emoji_id=EMOJI_HISTORY),
+            InlineKeyboardButton(get_text(lang, "btn_settings"), callback_data="settings", style=ButtonStyle.PRIMARY, icon_custom_emoji_id=EMOJI_GEAR),
         ]
     ])
 
@@ -97,7 +97,7 @@ def _keyboard_start(lang: str = "ru") -> InlineKeyboardMarkup:
 def _keyboard_cancel(lang: str = "ru") -> InlineKeyboardMarkup:
     """Build inline keyboard containing a cancel download button."""
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton(get_text(lang, "btn_cancel"), callback_data="cancel_download", style="danger", icon_custom_emoji_id=EMOJI_CANCEL)]
+        [InlineKeyboardButton(get_text(lang, "btn_cancel"), callback_data="cancel_download", style=ButtonStyle.DANGER, icon_custom_emoji_id=EMOJI_CANCEL)]
     ])
 
 
@@ -106,8 +106,8 @@ def _keyboard_fmt(platform: Platform, lang: str = "ru") -> InlineKeyboardMarkup:
     video_supported = platform not in (Platform.SPOTIFY, Platform.SHAZAM, Platform.PINTEREST, Platform.SOUNDCLOUD)
     buttons = []
     if video_supported:
-        buttons.append(InlineKeyboardButton(get_text(lang, "btn_video"), callback_data="fmt:video", style="primary", icon_custom_emoji_id=EMOJI_VIDEO))
-    buttons.append(InlineKeyboardButton(get_text(lang, "btn_audio"), callback_data="fmt:audio", style="primary", icon_custom_emoji_id=EMOJI_AUDIO))
+        buttons.append(InlineKeyboardButton(get_text(lang, "btn_video"), callback_data="fmt:video", style=ButtonStyle.PRIMARY, icon_custom_emoji_id=EMOJI_VIDEO))
+    buttons.append(InlineKeyboardButton(get_text(lang, "btn_audio"), callback_data="fmt:audio", style=ButtonStyle.PRIMARY, icon_custom_emoji_id=EMOJI_AUDIO))
     return InlineKeyboardMarkup([buttons])
 
 
@@ -117,8 +117,9 @@ def _keyboard_video_quality(available_heights: list[int] | None = None, lang: st
     for key, label in VIDEO_QUALITIES.items():
         if available_heights and int(key) > max(available_heights):
             continue
-        rows.append([InlineKeyboardButton(label, callback_data=f"vq:{key}", style="primary", icon_custom_emoji_id=EMOJI_GEAR)])
-    rows.append([InlineKeyboardButton(get_text(lang, "btn_back"), callback_data="back:fmt", style="danger", icon_custom_emoji_id=EMOJI_BACK)])
+        style = ButtonStyle.SUCCESS if key == "2160" else ButtonStyle.PRIMARY
+        rows.append([InlineKeyboardButton(label, callback_data=f"vq:{key}", style=style, icon_custom_emoji_id=EMOJI_GEAR)])
+    rows.append([InlineKeyboardButton(get_text(lang, "btn_back"), callback_data="back:fmt", style=ButtonStyle.DANGER, icon_custom_emoji_id=EMOJI_BACK)])
     return InlineKeyboardMarkup(rows)
 
 
@@ -130,21 +131,24 @@ def _keyboard_audio_format(codecs: set[str] | None = None, show_back: bool = Tru
     for key, info in AUDIO_FORMATS.items():
         if key == "flac" and not lossless_native:
             continue
-        style = "success" if key == "flac" or info.get("label") == "FLAC" else "primary"
+        style = ButtonStyle.SUCCESS if key == "flac" else ButtonStyle.PRIMARY
         rows.append([InlineKeyboardButton(info["label"], callback_data=f"af:{key}", style=style, icon_custom_emoji_id=EMOJI_GEAR)])
 
     if show_back:
-        rows.append([InlineKeyboardButton(get_text(lang, "btn_back"), callback_data="back:fmt", style="danger", icon_custom_emoji_id=EMOJI_BACK)])
+        rows.append([InlineKeyboardButton(get_text(lang, "btn_back"), callback_data="back:fmt", style=ButtonStyle.DANGER, icon_custom_emoji_id=EMOJI_BACK)])
     return InlineKeyboardMarkup(rows)
 
 
 
-def _keyboard_kp_seasons(seasons: list[int]) -> InlineKeyboardMarkup:
+IGNORED_PERFORMERS = {"Неизвестно", "Unknown", "Кинопоиск", "Kinopoisk"}
+
+
+def _keyboard_kp_seasons(seasons: list[int], lang: str = "ru") -> InlineKeyboardMarkup:
     """Build season selection inline keyboard for Kinopoisk series."""
     rows = []
     row = []
     for s in seasons:
-        row.append(InlineKeyboardButton(f"Сезон {s}", callback_data=f"kp_s:{s}", style="primary", icon_custom_emoji_id=EMOJI_MOVIE))
+        row.append(InlineKeyboardButton(get_text(lang, "kp_season_btn", season=s), callback_data=f"kp_s:{s}", style=ButtonStyle.PRIMARY, icon_custom_emoji_id=EMOJI_MOVIE))
         if len(row) == 3:
             rows.append(row)
             row = []
@@ -153,12 +157,12 @@ def _keyboard_kp_seasons(seasons: list[int]) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(rows)
 
 
-def _keyboard_kp_episodes(season: int, episodes: list[int]) -> InlineKeyboardMarkup:
+def _keyboard_kp_episodes(season: int, episodes: list[int], lang: str = "ru") -> InlineKeyboardMarkup:
     """Build episode selection inline keyboard for a Kinopoisk season."""
     rows = []
     row = []
     for e in episodes:
-        row.append(InlineKeyboardButton(f"Серия {e}", callback_data=f"kp_e:{e}", style="primary", icon_custom_emoji_id=EMOJI_POPCORN))
+        row.append(InlineKeyboardButton(get_text(lang, "kp_episode_btn", episode=e), callback_data=f"kp_e:{e}", style=ButtonStyle.PRIMARY, icon_custom_emoji_id=EMOJI_POPCORN))
         if len(row) == 4:
             rows.append(row)
             row = []
@@ -171,7 +175,7 @@ def _keyboard_kp_translations(translations: list[dict]) -> InlineKeyboardMarkup:
     """Build voiceover translation selection inline keyboard for Kinopoisk content."""
     rows = []
     for t in translations:
-        rows.append([InlineKeyboardButton(f"{t['name']}", callback_data=f"kp_tr:{t['id']}", style="primary", icon_custom_emoji_id=EMOJI_POPCORN)])
+        rows.append([InlineKeyboardButton(f"{t['name']}", callback_data=f"kp_tr:{t['id']}", style=ButtonStyle.PRIMARY, icon_custom_emoji_id=EMOJI_POPCORN)])
     return InlineKeyboardMarkup(rows)
 
 
@@ -179,29 +183,29 @@ def _history_keyboard(entries: list, lang: str = "ru") -> InlineKeyboardMarkup:
     """Build inline keyboard presenting recent user downloads history."""
     rows = []
     for entry in entries:
-        no_title = "Untitled" if lang == "en" else "Без названия"
+        no_title = get_text(lang, "untitled")
         label = entry.title or no_title
-        if entry.performer and entry.performer != "Неизвестно":
+        if entry.performer and entry.performer not in IGNORED_PERFORMERS:
             label = f"{entry.performer} - {label}"
         media_type = getattr(entry, "media_type", None)
         if media_type == "audio":
             emoji_id = EMOJI_AUDIO
-            style = "success"
+            style = ButtonStyle.SUCCESS
         elif media_type == "video":
             emoji_id = EMOJI_VIDEO
-            style = "primary"
+            style = ButtonStyle.PRIMARY
         else:
             emoji_id = EMOJI_HISTORY
-            style = "primary"
+            style = ButtonStyle.PRIMARY
 
         media_kind_map = {
-            "audio": "Audio" if lang == "en" else "Аудио",
-            "video": "Video" if lang == "en" else "Видео",
-            "photo": "Photo" if lang == "en" else "Фото",
-            "document": "File" if lang == "en" else "Файл",
+            "audio": get_text(lang, "media_audio"),
+            "video": get_text(lang, "media_video"),
+            "photo": get_text(lang, "media_photo"),
+            "document": get_text(lang, "media_file"),
         }
-        media_kind = media_kind_map.get(media_type, media_type or ("File" if lang == "en" else "Файл"))
-        format_label = getattr(entry, "media_format", None) or ("unknown" if lang == "en" else "неизвестный формат")
+        media_kind = media_kind_map.get(media_type, media_type or get_text(lang, "media_file"))
+        format_label = getattr(entry, "media_format", None) or get_text(lang, "unknown_format")
         label = f"[{media_kind} | {format_label}] {label}"
         if len(label) > 55:
             label = f"{label[:52]}..."
@@ -209,38 +213,35 @@ def _history_keyboard(entries: list, lang: str = "ru") -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(rows)
 
 
-
 _MD_SPECIAL_CHARS = r"_*`[]"
 
 def _md_escape(text: str) -> str:
-
     return re.sub(f"([{re.escape(_MD_SPECIAL_CHARS)}])", r"\\\1", text)
 
-def _title_with_link(title: str, url: str | None) -> str:
-
-    safe_title = _md_escape(title) if title else "Без названия"
+def _title_with_link(title: str, url: str | None, lang: str = "ru") -> str:
+    safe_title = _md_escape(title) if title else get_text(lang, "untitled")
     if not url:
         return safe_title
 
     safe_url = url.replace(")", "%29")
     return f"[{safe_title}]({safe_url})"
 
-def _caption(result, url: str | None = None) -> str:
-    title_part = _title_with_link(result.title, url)
+def _caption(result, url: str | None = None, lang: str = "ru") -> str:
+    title_part = _title_with_link(result.title, url, lang=lang)
     performer = result.uploader
-    if performer and performer != "Неизвестно":
+    if performer and performer not in IGNORED_PERFORMERS:
         lines = [f"**{_md_escape(performer)}** - {title_part}"]
     else:
         lines = [title_part]
-    if result.converted:
-        lines.append("\nЗапрошенный формат недоступен - файл конвертирован из лучшего доступного.")
+    if getattr(result, "converted", False):
+        lines.append(get_text(lang, "format_converted"))
     lines.append("@lukidown_bot")
     return "\n".join(lines)
 
-def _cache_caption(entry: CacheEntry) -> str:
-    title_part = _title_with_link(entry.title or "", entry.source_url)
+def _cache_caption(entry: CacheEntry, lang: str = "ru") -> str:
+    title_part = _title_with_link(entry.title or "", entry.source_url, lang=lang)
     performer = entry.performer
-    if performer and performer != "Неизвестно":
+    if performer and performer not in IGNORED_PERFORMERS:
         return f"**{_md_escape(performer)}** - {title_part}\n@lukidown_bot"
     return f"{title_part}\n@lukidown_bot"
 
@@ -346,20 +347,21 @@ def _requested_format_label(*, want_audio: bool, audio_format: str, video_qualit
         return AUDIO_FORMATS.get(audio_format, {}).get("label", audio_format)
     return VIDEO_QUALITIES.get(video_quality, f"{video_quality}p")
 
-def _cached_inline_media(entry: CacheEntry) -> InputMediaAudio | InputMediaVideo:
+def _cached_inline_media(entry: CacheEntry, lang: str = "ru") -> InputMediaAudio | InputMediaVideo:
     if entry.media_type == "video":
-        return InputMediaVideo(media=entry.file_id, caption=_cache_caption(entry))
-    return InputMediaAudio(media=entry.file_id, caption=_cache_caption(entry))
+        return InputMediaVideo(media=entry.file_id, caption=_cache_caption(entry, lang=lang))
+    return InputMediaAudio(media=entry.file_id, caption=_cache_caption(entry, lang=lang))
 
 async def _store_inline_cache(user_id: int, media_key: str, result, want_audio: bool, audio_format: str,
                               video_quality: str, url: str | None = None):
     shadow_message = None
+    user_lang = (await media_service.storage.get_user_language(user_id)) or "ru"
     try:
         if want_audio:
             shadow_message = await app.send_audio(
                 chat_id=user_id,
                 audio=str(result.filepath),
-                caption=_caption(result, url),
+                caption=_caption(result, url, lang=user_lang),
                 performer=result.uploader,
                 title=result.title,
                 thumb=str(result.thumbnail) if result.thumbnail and result.thumbnail.exists() else None,
@@ -371,7 +373,7 @@ async def _store_inline_cache(user_id: int, media_key: str, result, want_audio: 
             kwargs = {
                 "chat_id": user_id,
                 "video": str(result.filepath),
-                "caption": _caption(result, url),
+                "caption": _caption(result, url, lang=user_lang),
                 "supports_streaming": True,
                 "disable_notification": True,
                 "parse_mode": ParseMode.MARKDOWN,
@@ -461,9 +463,9 @@ def get_stable_id(query: str, fmt: str) -> str:
     return f"{fmt}_{hash_obj.hexdigest()[:8]}"
 
 
-async def _send_cached_media(chat_id: int, entry: CacheEntry):
+async def _send_cached_media(chat_id: int, entry: CacheEntry, lang: str = "ru"):
     """Send media file using cached Telegram file_id."""
-    caption = _cache_caption(entry)
+    caption = _cache_caption(entry, lang=lang)
     try:
         if entry.media_type == "audio":
             return await app.send_audio(chat_id, audio=entry.file_id, caption=caption, parse_mode=ParseMode.MARKDOWN)
@@ -479,14 +481,14 @@ async def _send_cached_media(chat_id: int, entry: CacheEntry):
         return await app.send_document(chat_id, document=entry.file_id, caption=caption, parse_mode=ParseMode.MARKDOWN)
 
 
-async def send_result(chat_id: int, result, status_msg: Message, url: str | None = None):
+async def send_result(chat_id: int, result, status_msg: Message, url: str | None = None, lang: str = "ru"):
     """Send downloaded media result file to specified Telegram chat."""
-    cap = _caption(result, url)
+    cap = _caption(result, url, lang=lang)
     fp = result.filepath
     thumb = result.thumbnail
     thumb_path = str(thumb) if thumb and thumb.exists() else None
 
-    await _safe_edit(status_msg, "Отправляю...")
+    await _safe_edit(status_msg, get_text(lang, "sending_file"))
 
     sent_message = None
     media_type = "document"
@@ -559,15 +561,15 @@ async def send_result(chat_id: int, result, status_msg: Message, url: str | None
     return sent_message, media_type
 
 
-async def _try_send_cached(chat_id: int, user_id: int, media_key: str, status_msg: Message | None = None) -> bool:
+async def _try_send_cached(chat_id: int, user_id: int, media_key: str, status_msg: Message | None = None, lang: str = "ru") -> bool:
     """Attempt sending cached media if matching key is found in storage."""
     cached = await media_service.storage.get_cache(media_key)
     if cached is None:
         return False
 
     if status_msg is not None:
-        await _safe_edit(status_msg, "Нашёл в кэше, отправляю...")
-    await _send_cached_media(chat_id, cached)
+        await _safe_edit(status_msg, get_text(lang, "found_in_cache"))
+    await _send_cached_media(chat_id, cached, lang=lang)
     await media_service.storage.add_history(user_id, media_key)
     if status_msg is not None:
         await _safe_delete(status_msg)
@@ -637,7 +639,7 @@ async def _process_queued_download(task: QueueTask):
     status_msg = await app.get_messages(task.status_chat_id, task.status_message_id)
     user_lang = (await media_service.storage.get_user_language(task.user_id)) or "ru"
 
-    if task.media_key and await _try_send_cached(task.chat_id, task.user_id, task.media_key, status_msg=status_msg):
+    if task.media_key and await _try_send_cached(task.chat_id, task.user_id, task.media_key, status_msg=status_msg, lang=user_lang):
         await media_service.queue.clear_active(task.user_id, task.task_id)
         return
 
@@ -668,8 +670,9 @@ async def _process_queued_download(task: QueueTask):
             season=task.season,
             episode=task.episode,
             translation_id=task.translation_id,
+            lang=user_lang,
         )
-        sent_message, media_type = await send_result(task.chat_id, result, status_msg, url=task.url)
+        sent_message, media_type = await send_result(task.chat_id, result, status_msg, url=task.url, lang=user_lang)
 
         if sent_message and task.media_key:
             file_id = None
@@ -960,15 +963,15 @@ async def handle_url(client: Client, msg: Message):
         await media_service.pending.set(key, state)
 
         meta = info.get("meta", {})
-        serial_fallback = "Series" if lang == "en" else "Сериал"
-        movie_fallback = "Movie" if lang == "en" else "Фильм"
+        serial_fallback = get_text(lang, "serial_label")
+        movie_fallback = get_text(lang, "movie_label")
         title_name = meta.get("nameRu") or meta.get("nameOriginal") or (serial_fallback if info["content_type"] == "serial" else movie_fallback)
         year_str = f" ({meta['year']})" if meta.get("year") else ""
 
         if info["content_type"] == "serial":
             await status_msg.edit_text(
                 get_text(lang, "kp_season_select", title=title_name, year=year_str),
-                reply_markup=_keyboard_kp_seasons(info["seasons"]),
+                reply_markup=_keyboard_kp_seasons(info["seasons"], lang=lang),
             )
         else:
             await status_msg.edit_text(
@@ -1015,8 +1018,8 @@ async def cb_fmt(client: Client, cq: CallbackQuery):
 
     if cq.data == "fmt:video":
         state["want_audio"] = False
-        getting_qualities = "Fetching available qualities..." if lang == "en" else "Получаю доступные качества..."
-        select_quality = "Select video quality:" if lang == "en" else "Выбери качество видео:"
+        getting_qualities = get_text(lang, "getting_qualities")
+        select_quality = get_text(lang, "select_quality")
         await cq.message.edit_text(getting_qualities)
         if platform == Platform.KINOPOISK:
             heights = [1080, 720, 480, 360]
@@ -1030,7 +1033,7 @@ async def cb_fmt(client: Client, cq: CallbackQuery):
         )
     else:
         state["want_audio"] = True
-        getting_formats = "Fetching available formats..." if lang == "en" else "Получаю доступные форматы..."
+        getting_formats = get_text(lang, "getting_formats")
         await cq.message.edit_text(getting_formats)
         if platform == Platform.KINOPOISK:
             codecs = {"mp3_192"}
@@ -1056,7 +1059,7 @@ async def cb_video_quality(client: Client, cq: CallbackQuery):
 
     quality = cq.data.split(":")[1]
     await cq.answer()
-    adding_msg = f"Adding video {VIDEO_QUALITIES[quality]} to queue..." if lang == "en" else f"Добавляю видео {VIDEO_QUALITIES[quality]} в очередь..."
+    adding_msg = get_text(lang, "adding_video_queue", quality=VIDEO_QUALITIES[quality])
     await cq.message.edit_text(adding_msg)
 
     await _enqueue_download(
@@ -1089,7 +1092,7 @@ async def cb_audio_format(client: Client, cq: CallbackQuery):
     afmt = cq.data.split(":", 1)[1]
     label = AUDIO_FORMATS.get(afmt, {}).get("label", afmt)
     await cq.answer()
-    adding_msg = f"Adding audio ({label}) to queue..." if lang == "en" else f"Добавляю аудио ({label}) в очередь..."
+    adding_msg = get_text(lang, "adding_audio_queue", label=label)
     await cq.message.edit_text(adding_msg)
 
     await _enqueue_download(
@@ -1127,7 +1130,7 @@ async def cb_kp_season(client: Client, cq: CallbackQuery):
     episodes = list_episodes(state["file_list"], season)
     await cq.message.edit_text(
         get_text(lang, "kp_serial_season", season=season),
-        reply_markup=_keyboard_kp_episodes(season, episodes),
+        reply_markup=_keyboard_kp_episodes(season, episodes, lang=lang),
     )
 
 
@@ -1200,20 +1203,22 @@ async def cb_back(client: Client, cq: CallbackQuery):
 @app.on_callback_query(filters.regex(r"^save:.+$"))
 async def cb_saved_media(client: Client, cq: CallbackQuery):
     """Handle callback to resend a cached media item from history."""
+    lang = (await media_service.storage.get_user_language(cq.from_user.id)) or "ru"
     media_key = cq.data.split(":", 1)[1]
     entry = await media_service.storage.get_cache(media_key)
     if entry is None:
-        await cq.answer("Этот файл больше недоступен.", show_alert=True)
+        await cq.answer(get_text(lang, "file_unavailable"), show_alert=True)
         return
 
-    await cq.answer("Отправляю сохранённый файл...")
-    await _send_cached_media(cq.message.chat.id, entry)
+    await cq.answer(get_text(lang, "sending_saved"))
+    await _send_cached_media(cq.message.chat.id, entry, lang=lang)
     await media_service.storage.add_history(cq.from_user.id, media_key)
 
 
 @app.on_inline_query()
 async def on_inline_query(client, iq):
     """Handle inline queries (@bot_username search query)."""
+    user_lang = (await media_service.storage.get_user_language(iq.from_user.id)) or "ru"
     query = iq.query.strip()
     if not query:
         await iq.answer([], cache_time=0)
@@ -1225,7 +1230,6 @@ async def on_inline_query(client, iq):
     if url:
         platform = detect_platform(url)
         if platform not in (Platform.SPOTIFY, Platform.SHAZAM, Platform.YANDEX, Platform.SOUNDCLOUD, Platform.VK_MUSIC):
-
             pass
     else:
         title, artist, search_q = _parse_search_query(query)
@@ -1239,8 +1243,8 @@ async def on_inline_query(client, iq):
     for key, info in AUDIO_FORMATS.items():
         if key == "flac":
             continue
-        keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("Загрузка", callback_data="ignore", style="primary", icon_custom_emoji_id=EMOJI_LOADING)]])
-        display_text = f"Скачать как {info['label']}"
+        keyboard = InlineKeyboardMarkup([[InlineKeyboardButton(get_text(user_lang, "download_inline"), callback_data="ignore", style=ButtonStyle.PRIMARY, icon_custom_emoji_id=EMOJI_LOADING)]])
+        display_text = get_text(user_lang, "download_as_fmt", label=info['label'])
         if title and artist:
             display_text = f"{artist} - {title} {info['label']}"
         results.append(
@@ -1249,7 +1253,7 @@ async def on_inline_query(client, iq):
                 title=info["label"],
                 description=display_text,
                 input_message_content=InputTextMessageContent(
-                    f"Запрос: {query}\nФормат: {info['label']}\nСтатус: начинаю работу"
+                    get_text(user_lang, "download_inline_status", query=query, fmt=info['label'])
                 ),
                 reply_markup=keyboard,
             )
@@ -1258,15 +1262,15 @@ async def on_inline_query(client, iq):
     if not search_q:
         if platform not in (Platform.SPOTIFY, Platform.SHAZAM, Platform.YANDEX, Platform.SOUNDCLOUD, Platform.VK_MUSIC):
             for q, label in VIDEO_QUALITIES.items():
-                keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("Загрузка", callback_data="ignore", style="primary", icon_custom_emoji_id=EMOJI_LOADING)]])
-                display_text = f"Скачать видео {label}"
+                keyboard = InlineKeyboardMarkup([[InlineKeyboardButton(get_text(user_lang, "download_inline"), callback_data="ignore", style=ButtonStyle.PRIMARY, icon_custom_emoji_id=EMOJI_LOADING)]])
+                display_text = get_text(user_lang, "download_video_fmt", label=label)
                 results.append(
                     InlineQueryResultArticle(
                         id=get_stable_id(query, f"vf_{q}"),
                         title=label,
                         description=display_text,
                         input_message_content=InputTextMessageContent(
-                            f"Запрос: {query}\nФормат: Видео {label}\nСтатус: начинаю работу"
+                            get_text(user_lang, "download_inline_status", query=query, fmt=f"Video {label}")
                         ),
                         reply_markup=keyboard,
                     )
@@ -1291,10 +1295,11 @@ async def on_chosen_inline_result(client: Client, chosen: ChosenInlineResult):
 
     afmt = fmt if want_audio else "mp3_192"
     vfmt = fmt if is_video else "1080"
+    user_lang = (await media_service.storage.get_user_language(chosen.from_user.id)) or "ru"
 
     await client.edit_inline_text(
         inline_message_id=chosen.inline_message_id,
-        text="Начинаю загрузку файла...",
+        text=get_text(user_lang, "starting_download"),
     )
 
     original_query = chosen.query.strip()
@@ -1324,12 +1329,11 @@ async def on_chosen_inline_result(client: Client, chosen: ChosenInlineResult):
 
     cached = await media_service.storage.get_cache(media_key)
     if cached:
-
         if (want_audio and cached.media_type == "audio") or (is_video and cached.media_type == "video"):
             try:
                 await client.edit_inline_media(
                     inline_message_id=chosen.inline_message_id,
-                    media=_cached_inline_media(cached),
+                    media=_cached_inline_media(cached, lang=user_lang),
                 )
                 await media_service.storage.add_history(chosen.from_user.id, media_key)
                 return
@@ -1346,6 +1350,7 @@ async def on_chosen_inline_result(client: Client, chosen: ChosenInlineResult):
             artist_track_name=search_q,
             music_title=title,
             music_artist=artist,
+            lang=user_lang,
         )
 
         thumb_path = str(result.thumbnail) if result.thumbnail and result.thumbnail.exists() else None
@@ -1353,7 +1358,7 @@ async def on_chosen_inline_result(client: Client, chosen: ChosenInlineResult):
         if want_audio:
             media_obj = InputMediaAudio(
                 media=str(result.filepath),
-                caption=_caption(result, url),
+                caption=_caption(result, url, lang=user_lang),
                 performer=result.uploader,
                 title=result.title,
                 thumb=thumb_path,
@@ -1361,7 +1366,7 @@ async def on_chosen_inline_result(client: Client, chosen: ChosenInlineResult):
         else:
             media_obj = InputMediaVideo(
                 media=str(result.filepath),
-                caption=_caption(result, url),
+                caption=_caption(result, url, lang=user_lang),
                 width=result.width,
                 height=result.height,
                 thumb=thumb_path,
@@ -1379,7 +1384,7 @@ async def on_chosen_inline_result(client: Client, chosen: ChosenInlineResult):
         log.error("Inline error %s", e)
         await client.edit_inline_text(
             inline_message_id=chosen.inline_message_id,
-            text="Произошла ошибка.",
+            text=get_text(user_lang, "download_error"),
         )
 
 

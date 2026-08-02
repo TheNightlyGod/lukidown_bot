@@ -470,6 +470,8 @@ async def extract_kinopoisk_stream(
         "meta": meta,
     }
 
+from i18n import get_text
+
 async def download_kinopoisk(
     url: str,
     tmpdir: Path,
@@ -481,10 +483,11 @@ async def download_kinopoisk(
     season: int | None = None,
     episode: int | None = None,
     translation_id: int | None = None,
+    lang: str = "ru",
 ) -> DownloadResult:
     """Download Kinopoisk stream via FFmpeg."""
     if on_progress:
-        await on_progress("Getting Kinopoisk stream links...")
+        await on_progress(get_text(lang, "dl_kinopoisk_links"))
     stream_info = await extract_kinopoisk_stream(
         url,
         season,
@@ -525,7 +528,7 @@ async def download_kinopoisk(
         cmd.extend(["-c", "copy"])
     cmd.extend(["-progress", "pipe:1", str(out_path)])
     if on_progress:
-        await on_progress("Downloading audio..." if want_audio else "Downloading video...")
+        await on_progress(get_text(lang, "dl_downloading_audio") if want_audio else get_text(lang, "dl_downloading_video"))
     proc = await asyncio.create_subprocess_exec(
         *cmd,
         stdout=asyncio.subprocess.PIPE,
@@ -585,7 +588,7 @@ async def download_kinopoisk(
                     max_bytes = config.MAX_FILE_SIZE_MB * 1024 * 1024
                     size_str = _human_size(size)
                     if size > max_bytes:
-                        size_str += " (будет сжато)"
+                        size_str += get_text(lang, "will_be_compressed")
                     parts = [size_str]
                     if last_speed > 0:
                         parts.append(f"{_human_size(last_speed)}/s")
@@ -606,7 +609,7 @@ async def download_kinopoisk(
     return DownloadResult(
         filepath=out_path,
         title=title,
-        uploader="Кинопоиск",
+        uploader=None,
         is_audio=want_audio,
         filesize=out_path.stat().st_size,
     )
