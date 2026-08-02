@@ -1283,7 +1283,7 @@ async def on_inline_query(client, iq):
                         title=info["label"],
                         description=display_text,
                         input_message_content=InputTextMessageContent(
-                            get_text(user_lang, "download_inline_status", query=query, fmt=f"Video {info["label"]}")
+                            get_text(user_lang, "download_inline_status", query=query, fmt=f'Video {info["label"]}')
                         ),
                         reply_markup=keyboard,
                     )
