@@ -106,8 +106,8 @@ class _SpotifyTokenCache:
                             access_token_data = data.get("accessToken")
                         elif kind == "client":
                             client_token_data = data.get("granted_token", {}).get("token")
-                    except Exception:
-                        pass
+                    except (json.JSONDecodeError, KeyError, TypeError, AttributeError) as e:
+                        log.debug("Spotify CDP token extraction error: %s", e)
 
                 cdp.on("Network.responseReceived", on_response)
                 cdp.on("Network.loadingFinished", lambda ev: asyncio.create_task(on_loading_finished(ev)))
@@ -179,12 +179,13 @@ async def _spotify_partner(operation: str, variables: dict, retry_on_401: bool =
             f"Response snippet: {snippet}"
         ) from e
     if not isinstance(data, dict):
-        raise RuntimeError(f"Spotify API returned unexpected format: {data}")
+        raise TypeError(f"Spotify API returned unexpected format: {data}")
     is_401 = resp.status_code == 401
     err_obj = data.get("error", {})
-    if isinstance(err_obj, dict):
-        if err_obj.get("status") == 401 or "expired" in str(err_obj).lower() or "token" in str(err_obj).lower():
-            is_401 = True
+    if isinstance(err_obj, dict) and (
+        err_obj.get("status") == 401 or "expired" in str(err_obj).lower() or "token" in str(err_obj).lower()
+    ):
+        is_401 = True
     if is_401:
         if retry_on_401:
             log.warning("Spotify API 401 error. Refreshing token cache and retrying...")
