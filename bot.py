@@ -62,6 +62,7 @@ EMOJI_GEAR = "6285058843781108584"
 EMOJI_BACK = "5212944206795920744"
 EMOJI_AUDIO = "5402595016101078333"
 EMOJI_VIDEO = "5337301488748211009"
+EMOJI_MIC = "5382013970905309819"
 
 
 def _platform_to_json(platform: Platform) -> str:
@@ -175,7 +176,7 @@ def _keyboard_kp_translations(translations: list[dict]) -> InlineKeyboardMarkup:
     """Build voiceover translation selection inline keyboard for Kinopoisk content."""
     rows = []
     for t in translations:
-        rows.append([InlineKeyboardButton(f"{t['name']}", callback_data=f"kp_tr:{t['id']}", style=ButtonStyle.PRIMARY, icon_custom_emoji_id=EMOJI_POPCORN)])
+        rows.append([InlineKeyboardButton(f"{t['name']}", callback_data=f"kp_tr:{t['id']}", style=ButtonStyle.PRIMARY, icon_custom_emoji_id=EMOJI_MIC)])
     return InlineKeyboardMarkup(rows)
 
 
