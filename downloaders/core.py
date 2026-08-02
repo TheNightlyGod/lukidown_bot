@@ -38,18 +38,18 @@ ProgressCallback = Callable[[str], Awaitable[None]]
 CancelCheck = Callable[[], bool]
 
 AUDIO_FORMATS = {
-    "flac": {"codec": "flac", "quality": "0", "ext": ".flac", "label": "FLAC (lossless)"},
-    "m4a": {"codec": "m4a", "quality": "0", "ext": ".m4a", "label": "M4A / AAC"},
-    "mp3_320": {"codec": "mp3", "quality": "320", "ext": ".mp3", "label": "MP3 / 320 kbps"},
-    "mp3_192": {"codec": "mp3", "quality": "192", "ext": ".mp3", "label": "MP3 / 192 kbps"},
+    "flac": {"codec": "flac", "quality": "0", "ext": ".flac", "label": "FLAC (lossless)", "emoji": "5458806371250105072"},
+    "m4a": {"codec": "m4a", "quality": "0", "ext": ".m4a", "label": "M4A / AAC", "emoji": "5364257510951762757"},
+    "mp3_320": {"codec": "mp3", "quality": "320", "ext": ".mp3", "label": "MP3 / 320 kbps", "emoji": "5194988065222831801"},
+    "mp3_192": {"codec": "mp3", "quality": "192", "ext": ".mp3", "label": "MP3 / 192 kbps", "emoji": "5373193336439990453"},
 }
 
 VIDEO_QUALITIES = {
-    "2160": "4K / 2160p",
-    "1080": "Full HD / 1080p",
-    "720": "HD / 720p",
-    "480": "SD / 480p",
-    "360": "Low / 360p",
+    "2160": {"label": "4K / 2160p", "emoji": "5287435501102445539"},
+    "1080": {"label": "Full HD / 1080p", "emoji": "5287237979851467801"},
+    "720": {"label": "HD / 720p", "emoji": "5287544765070454088"},
+    "480": {"label": "SD / 480p", "emoji": "5287316036587106782"},
+    "360": {"label": "Low / 360p", "emoji": "5287715971056806685"},
 }
 
 
