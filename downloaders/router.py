@@ -13,6 +13,7 @@ from downloaders.collections import download_ytdlp_playlist
 from downloaders.core import (
     CancelCheck,
     DownloadResult,
+    DownloadCancelled,
     FileTooLarge,
     ProgressCallback,
     _ensure_dir,
@@ -202,8 +203,8 @@ async def download(
                         if item.is_file():
                             try:
                                 item.unlink()
-                            except Exception:  # noqa: BLE001
-                                pass
+                            except Exception as e:  # noqa: BLE001
+                                logger.debug(f"Failed to unlink: {e}", item)
             if not result:
                 raise RuntimeError(f"Search failed: {last_err}") from last_err
     except Exception:
