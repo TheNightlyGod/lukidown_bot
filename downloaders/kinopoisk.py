@@ -3,10 +3,15 @@
 import asyncio
 import hashlib
 import json
+import logging
 import re
 import time
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
+
+import httpx
+
+logger = logging.getLogger("mediabot.kinopoisk")
 
 from playwright.async_api import Browser, Playwright, async_playwright
 
@@ -192,8 +197,8 @@ async def get_kinopoisk_meta(kp_id: str) -> dict:
         r = await client.get(url, headers=headers, timeout=10)
         if r.status_code == 200:
             return r.json()
-    except Exception:
-        pass
+    except (httpx.HTTPError, json.JSONDecodeError, ValueError) as e:
+        logger.debug("Kinopoisk unofficial API request failed: %s", e)
     return {}
 
 def get_kinopoisk_id(url: str) -> str:
@@ -214,7 +219,7 @@ async def get_players(kinopoisk_id: str, retries: int = 3, delay: float = 2.0) -
             r.raise_for_status()
             data = r.json()
             return data.get("data", [])
-        except Exception as e:
+        except (httpx.HTTPError, json.JSONDecodeError, ValueError) as e:
             last_err = e
             if attempt < retries - 1:
                 await asyncio.sleep(delay)
@@ -280,12 +285,12 @@ def list_translations(file_list: dict) -> list[dict]:
 
 def list_seasons(file_list: dict) -> list[int]:
     """List available season numbers."""
-    return sorted(int(s) for s in file_list.get("all", {}).keys() if str(s).isdigit())
+    return sorted(int(s) for s in file_list.get("all", {}) if str(s).isdigit())
 
 def list_episodes(file_list: dict, season: int) -> list[int]:
     """List available episode numbers for a season."""
     season_data = file_list.get("all", {}).get(str(season), {})
-    return sorted(int(e) for e in season_data.keys() if str(e).isdigit())
+    return sorted(int(e) for e in season_data if str(e).isdigit())
 
 def get_movie_entry(file_list: dict, translation_id: int | None = None) -> dict:
     """Get movie video entry matching translation."""

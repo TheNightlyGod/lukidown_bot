@@ -1,9 +1,12 @@
 """Media download routing module directing links and search requests to appropriate platform handlers."""
 
 import asyncio
+import logging
 import shutil
 import tempfile
 from pathlib import Path
+
+logger = logging.getLogger("mediabot.router")
 
 from config import config
 from downloaders.collections import download_ytdlp_playlist
@@ -147,8 +150,8 @@ async def download(
                         flat_info = await loop.run_in_executor(None, _extract_flat, url)
                     if flat_info and flat_info.get("_type") == "playlist":
                         is_playlist = True
-                except Exception:
-                    pass
+                except Exception as e:  # noqa: BLE001
+                    logger.debug("Flat extraction failed for %s: %s", url, e)
                 if is_playlist:
                     result = await download_ytdlp_playlist(
                         url=url,
@@ -207,7 +210,7 @@ async def download(
                 result.filepath = final_compressed
                 result.filesize = final_compressed.stat().st_size
                 result.converted = True
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 shutil.rmtree(tmpdir, ignore_errors=True)
                 raise FileTooLarge(
                     f"file too large: {_human_size(result.filesize)} (limit {config.MAX_FILE_SIZE_MB} MB), compression error: {e}"

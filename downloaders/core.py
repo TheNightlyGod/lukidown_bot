@@ -1,6 +1,7 @@
 """Core downloader logic, yt-dlp wrappers, and metadata embedding functions."""
 
 import asyncio
+import logging
 import re
 import time
 from collections.abc import Awaitable, Callable
@@ -15,6 +16,8 @@ from mutagen.mp4 import MP4, MP4Cover
 
 from config import config
 from downloaders.http import get_http_client
+
+log = logging.getLogger("mediabot.core")
 
 
 @dataclass
@@ -157,8 +160,8 @@ def _embed_cover_flac(media_file: Path, thumb_file: Path) -> None:
         pic.data = thumb_file.read_bytes()
         audio.add_picture(pic)
         audio.save()
-    except Exception:
-        pass
+    except Exception as e:  # noqa: BLE001
+        log.debug("FLAC cover embed error: %s", e)
 
 
 def _embed_cover_m4a(media_file: Path, thumb_file: Path) -> None:
@@ -168,8 +171,8 @@ def _embed_cover_m4a(media_file: Path, thumb_file: Path) -> None:
         fmt = MP4Cover.FORMAT_PNG if thumb_file.suffix.lower() == ".png" else MP4Cover.FORMAT_JPEG
         audio.tags["covr"] = [MP4Cover(thumb_file.read_bytes(), imageformat=fmt)]
         audio.save()
-    except Exception:
-        pass
+    except Exception as e:  # noqa: BLE001
+        log.debug("M4A cover embed error: %s", e)
 
 
 def _embed_cover_mp3(media_file: Path, thumb_file: Path) -> None:
@@ -189,8 +192,8 @@ def _embed_cover_mp3(media_file: Path, thumb_file: Path) -> None:
             )
         )
         audio.save()
-    except Exception:
-        pass
+    except Exception as e:  # noqa: BLE001
+        log.debug("MP3 cover embed error: %s", e)
 
 
 async def _clean_deezer_title(raw: str) -> tuple[str, str]:
@@ -204,23 +207,28 @@ async def _clean_deezer_title(raw: str) -> tuple[str, str]:
 
 async def _clean_apple_music_title(raw: str) -> tuple[str, str]:
     """Parse artist and title from Apple Music page title string."""
-    clean = raw.rsplit("-", 1)[0].strip()
-    if clean.lower().startswith("song by"):
-        clean = clean[8:].strip()
-    if "-" in clean:
-        artist, title = [p.strip() for p in clean.split("-", 1)]
+    left = raw.split("|")[0].strip()
+    if "от" in left:
+        parts = left.split("от", 1)
+        title = parts[0].replace("Песня", "").replace("«", "").replace("»", "").strip()
+        artist = parts[1].strip()
         return artist, title
-    return "", clean
+    if "by" in left:
+        parts = left.split("by", 1)
+        title = parts[0].replace("Song", "").replace("«", "").replace("»", "").strip()
+        artist = parts[1].strip()
+        return artist, title
+    return "", left
 
 
 async def get_available_video_heights(url: str) -> list[int]:
-    """Extract list of available video heights for a URL using yt-dlp.
+    """Extract sorted list of available video heights for a URL using yt-dlp.
 
     Args:
         url: Media link.
 
     Returns:
-        Sorted list of integer video heights in descending order.
+        List of integer video heights in descending order.
     """
     loop = asyncio.get_event_loop()
     def _run():
@@ -238,7 +246,8 @@ async def get_available_video_heights(url: str) -> list[int]:
             )
     try:
         return await loop.run_in_executor(None, _run)
-    except Exception:
+    except Exception as e:  # noqa: BLE001
+        log.debug("get_available_video_heights failed: %s", e)
         return []
 
 
@@ -263,7 +272,8 @@ async def get_available_audio_codecs(url: str) -> set[str]:
             }
     try:
         return await loop.run_in_executor(None, _run)
-    except Exception:
+    except Exception as e:  # noqa: BLE001
+        log.debug("get_available_audio_codecs failed: %s", e)
         return set()
 
 
@@ -391,8 +401,8 @@ async def download_ytdlp(
                 )
     except (FileTooLarge, DownloadCancelled):
         raise
-    except Exception:
-        pass
+    except Exception as e:  # noqa: BLE001
+        log.debug("Preflight info extraction failed: %s", e)
     converted = False
     def _run(opts: dict):
         with yt_dlp.YoutubeDL(opts) as ydl:
@@ -419,7 +429,7 @@ async def download_ytdlp(
                 ultimate_opts = {**common_opts, "format": "b/best"}
                 ultimate_opts.pop("cookiefile", None)
                 info = await loop.run_in_executor(None, _run, ultimate_opts)
-            except Exception:
+            except Exception:  # noqa: BLE001
                 raise RuntimeError(str(e2)) from e2
     if not info:
         raise RuntimeError("yt-dlp returned no info")
@@ -447,8 +457,8 @@ async def download_ytdlp(
                     title = str(audio.tags["TIT2"])
                 if "TPE1" in audio.tags:
                     uploader = str(audio.tags["TPE1"])
-        except Exception:
-            pass
+        except Exception as e:  # noqa: BLE001
+            log.debug("Reading MP3 tags failed: %s", e)
     if want_audio and media_file.suffix.lower() == ".m4a":
         try:
             audio = MP4(media_file)
@@ -457,8 +467,8 @@ async def download_ytdlp(
                     title = str(audio.tags["©nam"][0])
                 if "©ART" in audio.tags:
                     uploader = str(audio.tags["©ART"][0])
-        except Exception:
-            pass
+        except Exception as e:  # noqa: BLE001
+            log.debug("Reading MP4 tags failed: %s", e)
     final_title = music_title if music_title is not None else title
     final_artist = music_artist if music_artist is not None else uploader
     if final_title:
@@ -479,8 +489,8 @@ async def download_ytdlp(
                 new_filepath.unlink()
             media_file.rename(new_filepath)
             media_file = new_filepath
-        except Exception:
-            pass
+        except Exception as e:  # noqa: BLE001
+            log.debug("Renaming file failed: %s", e)
     if want_audio and thumb_file and thumb_file.exists():
         sfx = media_file.suffix.lower()
         if sfx == ".mp3":
@@ -606,8 +616,8 @@ async def download_pinterest(
             on_progress=on_progress,
             should_cancel=should_cancel,
         )
-    except Exception:
-        pass
+    except Exception as e:  # noqa: BLE001
+        log.debug("Pinterest download_ytdlp failed, trying fallback: %s", e)
     img_url = None
     client = await get_http_client()
     resp = await client.get(url, timeout=30.0, follow_redirects=True)

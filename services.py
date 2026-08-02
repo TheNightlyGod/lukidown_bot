@@ -8,7 +8,7 @@ import json
 import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from redis.asyncio import Redis
@@ -151,7 +151,7 @@ class QueueTask:
             "music_title": self.music_title,
             "music_artist": self.music_artist,
             "media_key": self.media_key,
-            "created_at": self.created_at or datetime.utcnow().isoformat(),
+            "created_at": self.created_at or datetime.now(timezone.utc).isoformat(),
             "season": self.season,
             "episode": self.episode,
             "translation_id": self.translation_id,
