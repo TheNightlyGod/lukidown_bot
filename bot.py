@@ -468,8 +468,8 @@ def _parse_search_query(text: str):
 
 def get_stable_id(query: str, fmt: str) -> str:
     """Generate short stable identifier for inline query results."""
-    hash_obj = hashlib.blake2b(query.encode(), digest_size=4).hexdigest()
-    return f"{fmt}_{hash_obj.hexdigest()[:8]}"
+    hash_str = hashlib.blake2b(query.encode(), digest_size=4).hexdigest()
+    return f"{fmt}_{hash_str}"
 
 
 async def _send_cached_media(chat_id: int, entry: CacheEntry, lang: str = "ru"):
