@@ -53,8 +53,8 @@ STRINGS: dict[str, dict[str, str]] = {
         "saves_empty": "Здесь появятся последние сохранённые файлы.",
         "saves_header": "Твои последние {limit} сохранений:",
         "search_usage": (
-            "Использование:\n```/search Название\nАвтор```\n"
-            "или ```/search Автор - Название```"
+            "Использование:\n/search Название\nАвтор\n"
+            "или /search Автор - Название"
         ),
         "select_audio_format": "Выбери формат аудио:",
         "select_format": "Выбери формат:",
@@ -156,8 +156,8 @@ STRINGS: dict[str, dict[str, str]] = {
         "saves_empty": "Your recent saved files will appear here.",
         "saves_header": "Your last {limit} saves:",
         "search_usage": (
-            "Usage:\n```/search Title\nArtist```\n"
-            "or ```/search Artist - Title```"
+            "Usage:\n/search Title\nArtist\n"
+            "or /search Artist - Title"
         ),
         "select_audio_format": "Select audio format:",
         "select_format": "Select format:",
