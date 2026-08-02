@@ -34,7 +34,7 @@ async def _check_telegram() -> tuple[str, dict]:
         return "OK", {"username": f"@{me.username}", "id": me.id}
     except asyncio.TimeoutError:
         return "TIMEOUT", {}
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         return "ERROR", {"error": str(e)}
 
 
@@ -52,7 +52,7 @@ async def _check_database() -> tuple[str, dict]:
         return "OK", {"redis": "OK", "queue_length": queue_len, "processing": processing}
     except asyncio.TimeoutError:
         return "TIMEOUT", {"error": "Redis ping timed out"}
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         return "ERROR", {"error": str(e)}
 
 
@@ -63,13 +63,15 @@ async def _check_downloader() -> tuple[str, dict]:
         A tuple containing (status_str, details_dict).
     """
     try:
+        import importlib.util
         import shutil
         import subprocess
 
         ytdlp = shutil.which("yt-dlp")
         if ytdlp is None:
-            import yt_dlp
-            return "OK", {"backend": "yt_dlp (python package)"}
+            if importlib.util.find_spec("yt_dlp") is not None:
+                return "OK", {"backend": "yt_dlp (python package)"}
+            return "ERROR", {"error": "yt-dlp not found"}
 
         proc = await asyncio.wait_for(
             asyncio.create_subprocess_exec(
@@ -85,7 +87,7 @@ async def _check_downloader() -> tuple[str, dict]:
         return "TIMEOUT", {}
     except ImportError:
         return "ERROR", {"error": "yt-dlp not found"}
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         return "ERROR", {"error": str(e)}
 
 
