@@ -378,6 +378,7 @@ async def download_ytdlp(
             "-metadata", "purl=",
         ]
     max_bytes = config.MAX_FILE_SIZE_MB * 1024 * 1024
+    is_search = url.startswith(("ytsearch", "gvsearch", "yvsearch", "scsearch"))
     common_opts = {
         **_base_ydl_opts(),
         "outtmpl": str(tmpdir / "%(id)s.%(ext)s"),
@@ -386,15 +387,25 @@ async def download_ytdlp(
         "progress_hooks": [_progress_hook(sync_cb, should_cancel=should_cancel, max_bytes=max_bytes)],
         "postprocessor_args": postprocessor_args,
     }
+    if is_search:
+        common_opts["noplaylist"] = False
+
     ydl_opts = {**common_opts, "format": fmt}
     def _get_info(opts: dict):
         preflight = {**_base_ydl_opts(), "skip_download": True, "format": opts.get("format", "best")}
+        if is_search:
+            preflight["noplaylist"] = False
         with yt_dlp.YoutubeDL(preflight) as ydl:
             return ydl.extract_info(url, download=False)
     try:
         preflight_info = await loop.run_in_executor(None, _get_info, ydl_opts)
         if preflight_info:
-            est = preflight_info.get("filesize") or preflight_info.get("filesize_approx") or 0
+            target_info = preflight_info
+            if preflight_info.get("_type") == "playlist" and preflight_info.get("entries"):
+                entries = [e for e in preflight_info["entries"] if e]
+                if entries:
+                    target_info = entries[0]
+            est = target_info.get("filesize") or target_info.get("filesize_approx") or 0
             if est and est > max_bytes:
                 raise FileTooLarge(
                     f"file too large: ~{_human_size(est)} (limit {config.MAX_FILE_SIZE_MB} MB)"
@@ -418,6 +429,8 @@ async def download_ytdlp(
         fallback_fmt = "bestaudio/best" if want_audio else "best/b"
         fallback_opts = {**common_opts, "format": fallback_fmt}
         fallback_opts.pop("cookiefile", None)
+        if is_search:
+            fallback_opts["noplaylist"] = False
         if on_progress:
             await on_progress("Required format not available, converting from best available...")
         try:
@@ -428,6 +441,8 @@ async def download_ytdlp(
             try:
                 ultimate_opts = {**common_opts, "format": "b/best"}
                 ultimate_opts.pop("cookiefile", None)
+                if is_search:
+                    ultimate_opts["noplaylist"] = False
                 info = await loop.run_in_executor(None, _run, ultimate_opts)
             except Exception:  # noqa: BLE001
                 raise RuntimeError(str(e2)) from e2
@@ -438,17 +453,31 @@ async def download_ytdlp(
     files = sorted(tmpdir.iterdir(), key=lambda f: f.stat().st_size, reverse=True)
     media_file = next((f for f in files if f.suffix.lower() in media_exts), None)
     if thumb_url:
-        thumb_path = tmpdir / "thumbnail.jpg"
-        client = await get_http_client(enable_proxy=False)
-        resp = await client.get(thumb_url, timeout=30.0, follow_redirects=True)
-        thumb_path.write_bytes(resp.content)
-        thumb_file = thumb_path
+        try:
+            thumb_path = tmpdir / "thumbnail.jpg"
+            client = await get_http_client(enable_proxy=False)
+            resp = await client.get(thumb_url, timeout=30.0, follow_redirects=True)
+            if resp.status_code == 200:
+                thumb_path.write_bytes(resp.content)
+                thumb_file = thumb_path
+            else:
+                thumb_file = next((f for f in files if f.suffix.lower() in img_exts), None)
+        except Exception as e:  # noqa: BLE001
+            log.debug("Downloading thumb_url failed: %s", e)
+            thumb_file = next((f for f in files if f.suffix.lower() in img_exts), None)
     else:
         thumb_file = next((f for f in files if f.suffix.lower() in img_exts), None)
     if not media_file:
         raise RuntimeError("no media file after download")
-    title = info.get("title", "")
-    uploader = info.get("uploader", "") or info.get("channel", "") or ""
+
+    entry_info = info
+    if info.get("_type") == "playlist" and info.get("entries"):
+        entries = [e for e in info["entries"] if e]
+        if entries:
+            entry_info = entries[0]
+
+    title = entry_info.get("title", "")
+    uploader = entry_info.get("uploader", "") or entry_info.get("channel", "") or ""
     if want_audio and media_file.suffix.lower() == ".mp3":
         try:
             audio = MP3(media_file, ID3=ID3)
@@ -505,9 +534,9 @@ async def download_ytdlp(
         thumbnail=thumb_file,
         uploader=music_artist if music_artist is not None else uploader,
         is_audio=want_audio,
-        width=int(info.get("width", 0) or 0),
-        height=int(info.get("height", 0) or 0),
-        duration=int(info.get("duration", 0) or 0),
+        width=int(entry_info.get("width", 0) or 0),
+        height=int(entry_info.get("height", 0) or 0),
+        duration=int(entry_info.get("duration", 0) or 0),
         filesize=media_file.stat().st_size,
         converted=converted,
     )
