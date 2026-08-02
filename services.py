@@ -185,7 +185,7 @@ class Storage:
         """Fetch cached media entry by hash key.
 
         Args:
-            media_key: MD5 hash key identifying media content.
+            media_key: blake2b hash key identifying media content.
 
         Returns:
             CacheEntry instance or None if key is not found.
@@ -217,7 +217,7 @@ class Storage:
         """Create or update cached media entry in database.
 
         Args:
-            media_key: Unique MD5 hash key.
+            media_key: Unique blake2b hash key.
             file_id: Telegram file ID string.
             media_type: Type descriptor ('audio', 'video', 'document').
             media_format: Requested audio/video format quality string.
@@ -557,10 +557,10 @@ class MediaService:
         episode: int | None = None,
         translation_id: int | None = None,
     ) -> str:
-        """Generate unique MD5 cache key string for media parameters.
+        """Generate unique blake2b cache key string for media parameters.
 
         Returns:
-            32-character hexadecimal MD5 digest string.
+            32-character hexadecimal blake2b digest string.
         """
         if want_audio:
             artist = (music_artist or "").strip().lower()
@@ -569,7 +569,7 @@ class MediaService:
         else:
             video_id = url or f"{platform.value}:{search_query or ''}"
             source = f"video|{video_id.strip().lower()}|{video_quality}|s{season}e{episode}t{translation_id}"
-        return hashlib.md5(source.encode("utf-8")).hexdigest()
+        return hashlib.blake2b(source.encode("utf-8"), digest_size=4).hexdigest()
 
 
 media_service = MediaService()
