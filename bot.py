@@ -245,15 +245,15 @@ def _caption(result, url: str | None = None, lang: str = "ru") -> str:
         lines = [title_part]
     if getattr(result, "converted", False):
         lines.append(get_text(lang, "format_converted"))
-    lines.append("@SaZaNDownloader_bot")
+    lines.append(f"@{app.me.username}")
     return "\n".join(lines)
 
 def _cache_caption(entry: CacheEntry, lang: str = "ru") -> str:
     title_part = _title_with_link(entry.title or "", entry.source_url, lang=lang)
     performer = entry.performer
     if performer and performer not in IGNORED_PERFORMERS:
-        return f"**{_md_escape(performer)}** - {title_part}\n@SaZaNDownloader_bot"
-    return f"{title_part}\n@SaZaNDownloader_bot"
+        return f"**{_md_escape(performer)}** - {title_part}\n@{app.me.username}"
+    return f"{title_part}\n@{app.me.username}"
 
 async def _probe_video_metadata(filepath: Path) -> tuple[int, int, int]:
     """Retrieve (width, height, duration) using ffprobe."""
