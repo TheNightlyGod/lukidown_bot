@@ -349,7 +349,7 @@ async def download_spotify(
             artist = ", ".join(artists_list)
             cover_sources = t.get("albumOfTrack", {}).get("coverArt", {}).get("sources", [])
             thumb_url = _best_image(cover_sources) or None
-        except Exception as err:
+        except Exception as err: # noqa: BLE001
             log.warning("Spotify partner API getTrack failed (%s), falling back to embed page...", err)
             artist, track_name, thumb_url = await _get_track_meta_embed(entity_id)
         if not track_name or not artist:
