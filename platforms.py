@@ -34,7 +34,7 @@ PLATFORM_PATTERNS: list[tuple[Platform, list[str]]] = [
         r"(?:https?://)?(?:www\.)?kinopoisk\.ru/(?:film|series|movie)/\d+",
     ]),
     (Platform.YOUTUBE, [
-        r"(?:https?://)?(?:www\.)?youtube\.com/(?:watch|shorts|live)",
+        r"(?:https?://)?(?:www\.)?youtube\.com/(?:watch|shorts|live|playlist)",
         r"(?:https?://)?(?:www\.)?youtu\.be/",
         r"(?:https?://)?(?:m\.)?youtube\.com/",
         r"(?:https?://)?(?:music\.)?youtube\.com/",

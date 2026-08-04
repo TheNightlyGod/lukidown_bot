@@ -13,8 +13,6 @@ import httpx
 
 logger = logging.getLogger("mediabot.kinopoisk")
 
-from playwright.async_api import Browser, Playwright, async_playwright
-
 from config import config
 from downloaders.core import (
     CancelCheck,
@@ -25,24 +23,7 @@ from downloaders.core import (
     _safe_filename,
 )
 from downloaders.http import get_http_client
-
-_playwright_instance: Playwright | None = None
-_browser_instance: Browser | None = None
-_browser_lock = asyncio.Lock()
-
-
-async def _get_browser() -> Browser:
-    """Get or initialize a shared Playwright browser instance."""
-    global _playwright_instance, _browser_instance
-    if _browser_instance is not None and _browser_instance.is_connected():
-        return _browser_instance
-    async with _browser_lock:
-        if _browser_instance is not None and _browser_instance.is_connected():
-            return _browser_instance
-        if _playwright_instance is None:
-            _playwright_instance = await async_playwright().start()
-        _browser_instance = await _playwright_instance.chromium.launch(headless=True)
-        return _browser_instance
+from i18n import get_text
 
 
 def _is_prime(n: int) -> bool:
@@ -326,6 +307,24 @@ def get_episode_entry(
         return entry
     return next(iter(ep_data.values()))
 
+
+async def _fetch_iframe_data(target_iframe_url: str) -> tuple[dict, str]:
+    """Fetch iframe HTML and extract file_list and meta_wl via HTTP without Playwright."""
+    client = await get_http_client()
+    headers = {
+        "User-Agent": UA,
+        "Referer": "https://linkpp.ink/",
+        "Origin": "https://linkpp.ink",
+    }
+    r = await client.get(target_iframe_url, headers=headers, timeout=15.0)
+    r.raise_for_status()
+    html = r.text
+    file_list = extract_file_list(html)
+    m_wl = re.search(r'<meta\s+name=["\']viewporti["\']\s+content=["\']([^"\']+)["\']', html)
+    meta_wl = m_wl.group(1) if m_wl else ""
+    return file_list, meta_wl
+
+
 async def fetch_kinopoisk_info(kp_url: str) -> dict:
     """Fetch content metadata, season list, and translation list for Kinopoisk URL."""
     kp_id = get_kinopoisk_id(kp_url)
@@ -333,31 +332,8 @@ async def fetch_kinopoisk_info(kp_url: str) -> dict:
     players = await get_players(kp_id)
     alloha = get_alloha_player(players)
     target_iframe_url = alloha["iframeUrl"]
-    browser = await _get_browser()
-    context = await browser.new_context(user_agent=UA)
-    try:
-        page = await context.new_page()
-        await page.route("**/*app.1216f2e9.js*", lambda route: route.abort())
-        await page.goto("https://linkpp.ink/", wait_until="domcontentloaded")
-        await page.evaluate(f"""() => {{
-            const iframe = document.createElement('iframe');
-            iframe.src = '{target_iframe_url}';
-            iframe.id = 'player_iframe';
-            document.body.appendChild(iframe);
-        }}""")
-        await page.wait_for_timeout(2000)
-        frame = None
-        for f in page.frames:
-            if "theatre.stravers.live" in f.url:
-                frame = f
-                break
-        if not frame:
-            raise RuntimeError("Failed to load player iframe")
-        html = await frame.content()
-    finally:
-        await context.close()
-
-    file_list = extract_file_list(html)
+    
+    file_list, _ = await _fetch_iframe_data(target_iframe_url)
     content_type = file_list.get("type", "movie")
     translations = list_translations(file_list)
     seasons = list_seasons(file_list) if content_type == "serial" else []
@@ -370,13 +346,14 @@ async def fetch_kinopoisk_info(kp_url: str) -> dict:
         "meta": meta,
     }
 
+
 async def extract_kinopoisk_stream(
     kp_url: str,
     season: int | None = None,
     episode: int | None = None,
     translation_id: int | None = None,
 ) -> dict:
-    """Extract stream links, quality options, and auth tokens for Kinopoisk item."""
+    """Extract stream links, quality options, and auth tokens for Kinopoisk item without Playwright."""
     kp_id = get_kinopoisk_id(kp_url)
     meta = await get_kinopoisk_meta(kp_id)
     players = await get_players(kp_id)
@@ -388,76 +365,51 @@ async def extract_kinopoisk_stream(
             if t.get("id") == translation_id:
                 target_iframe_url = t["iframeUrl"]
                 break
-    browser = await _get_browser()
-    context = await browser.new_context(user_agent=UA)
-    try:
-        page = await context.new_page()
-        await page.route("**/*app.1216f2e9.js*", lambda route: route.abort())
-        await page.goto("https://linkpp.ink/", wait_until="domcontentloaded")
-        await page.evaluate(f"""() => {{
-            const iframe = document.createElement('iframe');
-            iframe.src = '{target_iframe_url}';
-            iframe.id = 'player_iframe';
-            document.body.appendChild(iframe);
-        }}""")
-        await page.wait_for_timeout(2000)
-        frame = None
-        for f in page.frames:
-            if "theatre.stravers.live" in f.url:
-                frame = f
-                break
-        if not frame:
-            raise RuntimeError("Failed to load player iframe")
-        meta_wl = await frame.evaluate("() => document.querySelector('meta[name=\"viewporti\"]')?.content")
-        if not meta_wl:
-            html_content = await frame.content()
-            meta_wl = re.search(r'<meta\s+name=["\']viewporti["\']\s+content=["\']([^"\']+)["\']', html_content).group(1)
-        html = await frame.content()
-        file_list = extract_file_list(html)
-        token = extract_token_from_url(target_iframe_url)
-        content_type = file_list.get("type", "movie")
-        raw_name = meta.get("nameRu") or meta.get("nameOriginal") or meta.get("nameEn")
-        year = meta.get("year")
-        year_str = f" ({year})" if year else ""
-        if content_type == "serial":
-            if season is None or episode is None:
-                seasons = list_seasons(file_list)
-                season = season or (seasons[0] if seasons else 1)
-                episodes = list_episodes(file_list, season)
-                episode = episode or (episodes[0] if episodes else 1)
-            entry = get_episode_entry(file_list, season, episode, translation_id)
-            if raw_name:
-                title = f"{raw_name} - S{season:02d}E{episode:02d}"
-            else:
-                title = f"Kinopoisk_S{season:02d}E{episode:02d}"
-        else:
-            entry = get_movie_entry(file_list, translation_id)
-            if raw_name:
-                title = f"{raw_name}{year_str}"
-            else:
-                title = f"Kinopoisk_Film_{kp_id}"
-        episode_id = entry["id"]
-        borth_value = make_borth(meta_wl)
-        fetch_js = """async (args) => {
-            const res = await fetch('https://theatre.stravers.live/bnsi/movies/' + args.ep_id, {
-                method: 'POST',
-                headers: {
-                    'accept': '*/*',
-                    'content-type': 'application/x-www-form-urlencoded; charset=UTF-8',
-                    'x-requested-with': 'XMLHttpRequest',
-                    'borth': args.borth
-                },
-                body: 'token=' + args.token + '&av1=true&autoplay=0&audio=&subtitle='
-            });
-            return { status: res.status, data: await res.json() };
-        }"""
-        res = await frame.evaluate(fetch_js, {"ep_id": episode_id, "borth": borth_value, "token": token})
-    finally:
-        await context.close()
 
-    if res["status"] != 200:
-        raise RuntimeError(f"HTTP {res['status']}: {res['data']}")
-    result = res["data"]
+    file_list, meta_wl = await _fetch_iframe_data(target_iframe_url)
+    token = extract_token_from_url(target_iframe_url)
+    content_type = file_list.get("type", "movie")
+    raw_name = meta.get("nameRu") or meta.get("nameOriginal") or meta.get("nameEn")
+    year = meta.get("year")
+    year_str = f" ({year})" if year else ""
+    if content_type == "serial":
+        if season is None or episode is None:
+            seasons = list_seasons(file_list)
+            season = season or (seasons[0] if seasons else 1)
+            episodes = list_episodes(file_list, season)
+            episode = episode or (episodes[0] if episodes else 1)
+        entry = get_episode_entry(file_list, season, episode, translation_id)
+        if raw_name:
+            title = f"{raw_name} - S{season:02d}E{episode:02d}"
+        else:
+            title = f"Kinopoisk_S{season:02d}E{episode:02d}"
+    else:
+        entry = get_movie_entry(file_list, translation_id)
+        if raw_name:
+            title = f"{raw_name}{year_str}"
+        else:
+            title = f"Kinopoisk_Film_{kp_id}"
+    episode_id = entry["id"]
+    borth_value = make_borth(meta_wl)
+
+    client = await get_http_client()
+    post_headers = {
+        "User-Agent": UA,
+        "accept": "*/*",
+        "content-type": "application/x-www-form-urlencoded; charset=UTF-8",
+        "x-requested-with": "XMLHttpRequest",
+        "borth": borth_value,
+        "Origin": "https://theatre.stravers.live",
+        "Referer": target_iframe_url,
+    }
+    post_data = f"token={token}&av1=true&autoplay=0&audio=&subtitle="
+    api_url = f"https://theatre.stravers.live/bnsi/movies/{episode_id}"
+
+    resp = await client.post(api_url, headers=post_headers, content=post_data, timeout=15.0)
+    if resp.status_code != 200:
+        raise RuntimeError(f"HTTP {resp.status_code}: {resp.text}")
+
+    result = resp.json()
     guard_token = (
         result.get("guard")
         or result.get("edge_hash")
@@ -475,8 +427,6 @@ async def extract_kinopoisk_stream(
         "target_iframe_url": target_iframe_url,
         "meta": meta,
     }
-
-from i18n import get_text
 
 
 async def download_kinopoisk(

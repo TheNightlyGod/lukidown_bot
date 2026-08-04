@@ -153,11 +153,21 @@ async def download_ytdlp_playlist(
         await on_progress(f"Found {len(entries)} tracks in playlist '{collection_name}'...")
     tracks = []
     for entry in entries:
+        if not entry:
+            continue
         track_url = entry.get("url") or entry.get("webpage_url")
+        if not track_url and entry.get("id"):
+            track_url = f"https://www.youtube.com/watch?v={entry['id']}"
+        elif track_url and not track_url.startswith("http"):
+            if track_url.startswith("/"):
+                track_url = f"https://www.youtube.com{track_url}"
+            else:
+                track_url = f"https://www.youtube.com/watch?v={track_url}"
+
         if track_url:
             tracks.append({
                 "url": track_url,
-                "title": entry.get("title") or "Track",
+                "title": entry.get("title") or entry.get("id") or "Track",
             })
     async def _dl_one(track: dict, idx: int, total: int, track_tmpdir: Path) -> DownloadResult:
         track_url = track["url"]
