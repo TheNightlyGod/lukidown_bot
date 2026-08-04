@@ -55,77 +55,47 @@ class _SpotifyTokenCache:
         self._expires_at = 0.0
 
     async def ensure_fresh_async(self):
-        """Ensure active tokens are fresh, refreshing via Playwright if expired."""
-        if time.time() < self._expires_at - 300 and self._access_token and self._client_token:
+        """Ensure active tokens are fresh, refreshing via embed page if expired."""
+        if time.time() < self._expires_at - 300 and self._access_token:
             return
         async with self._refresh_lock:
-            if time.time() < self._expires_at - 300 and self._access_token and self._client_token:
+            if time.time() < self._expires_at - 300 and self._access_token:
                 return
             await self._refresh_async()
 
     async def _refresh_async(self):
-        """Launch headless Chromium browser via Playwright to intercept new tokens."""
-        from playwright.async_api import async_playwright
-        async with async_playwright() as p:
-            browser = await p.chromium.launch(headless=True)
-            try:
-                context = await browser.new_context(
-                    user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36"
-                )
-                page = await context.new_page()
-                cdp = await context.new_cdp_session(page)
-                await cdp.send("Network.enable")
-                await cdp.send("Network.setCacheDisabled", {"cacheDisabled": True})
+        """Fetch a fresh anonymous access token from Spotify embed page."""
+        url = "https://open.spotify.com/embed/track/3kP9siP1WEQb396Fs9AR2P"
+        client = await get_http_client(enable_proxy=False)
+        try:
+            resp = await client.get(
+                url,
+                headers={
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                },
+                timeout=15.0
+            )
+            resp.raise_for_status()
+        except Exception as e:
+            raise RuntimeError(f"Failed to fetch Spotify embed page: {e}") from e
 
-                access_token_data = None
-                client_token_data = None
-                pending = {}
+        m = re.search(r'<script id="__NEXT_DATA__" type="application/json">([^<]+)</script>', resp.text)
+        if not m:
+            raise RuntimeError("Could not find __NEXT_DATA__ script block in Spotify embed page")
 
-                def on_response(event):
-                    resp = event.get("response", {})
-                    url = resp.get("url", "")
-                    status = resp.get("status")
-                    req_id = event.get("requestId")
-                    if status == 200:
-                        if "/api/token" in url and not access_token_data:
-                            pending[req_id] = "access"
-                        elif "clienttoken.spotify.com" in url and not client_token_data:
-                            pending[req_id] = "client"
+        try:
+            data = json.loads(m.group(1))
+            settings = data.get("props", {}).get("pageProps", {}).get("state", {}).get("settings", {})
+            access_token = settings.get("session", {}).get("accessToken")
+        except Exception as e:
+            raise RuntimeError(f"Failed to parse Spotify embed page config JSON: {e}") from e
 
-                async def on_loading_finished(event):
-                    nonlocal access_token_data, client_token_data
-                    req_id = event.get("requestId")
-                    kind = pending.pop(req_id, None)
-                    if not kind:
-                        return
-                    try:
-                        body_res = await cdp.send("Network.getResponseBody", {"requestId": req_id})
-                        body = body_res.get("body", "")
-                        data = json.loads(body)
-                        if kind == "access":
-                            access_token_data = data.get("accessToken")
-                        elif kind == "client":
-                            client_token_data = data.get("granted_token", {}).get("token")
-                    except (json.JSONDecodeError, KeyError, TypeError, AttributeError) as e:
-                        log.debug("Spotify CDP token extraction error: %s", e)
+        if not access_token:
+            raise RuntimeError("Spotify embed page config did not contain accessToken")
 
-                cdp.on("Network.responseReceived", on_response)
-                cdp.on("Network.loadingFinished", lambda ev: asyncio.create_task(on_loading_finished(ev)))
-
-                await page.goto("https://open.spotify.com/", wait_until="domcontentloaded")
-                for _ in range(50):
-                    if access_token_data and client_token_data:
-                        break
-                    await asyncio.sleep(0.2)
-            finally:
-                await browser.close()
-
-        if not access_token_data or not client_token_data:
-            raise RuntimeError("Could not retrieve Spotify tokens via Playwright")
-
-        self._access_token = access_token_data
-        self._client_token = client_token_data
-        self._expires_at = time.time() + 55 * 60
+        self._access_token = access_token
+        self._client_token = ""
+        self._expires_at = time.time() + 50 * 60
 
 _spotify_tokens = _SpotifyTokenCache()
 
@@ -308,6 +278,34 @@ async def _spotify_get_collection_tracks(
         return name, cover, tracks
 
 
+async def _get_track_meta_embed(entity_id: str) -> tuple[str, str, str | None]:
+    """Fallback: fetch track metadata directly from Spotify embed HTML without API tokens."""
+    url = f"https://open.spotify.com/embed/track/{entity_id}"
+    client = await get_http_client(enable_proxy=False)
+    resp = await client.get(url, headers={
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36",
+    }, timeout=15.0)
+    resp.raise_for_status()
+    m = re.search(r'<script id="__NEXT_DATA__" type="application/json">([^<]+)</script>', resp.text)
+    if not m:
+        raise RuntimeError("Could not parse Spotify embed page metadata")
+    data = json.loads(m.group(1))
+    status = data.get("props", {}).get("pageProps", {}).get("status")
+    if status == 404:
+        raise RuntimeError("Трек не найден в Spotify (возможно, битая ссылка или трек заблокирован)")
+    entity = data.get("props", {}).get("pageProps", {}).get("state", {}).get("data", {}).get("entity", {})
+    track_name = entity.get("title", "")
+    artists = [a.get("name") for a in entity.get("artists", []) if a.get("name")]
+    artist = ", ".join(artists) if artists else entity.get("subtitle", "")
+    visual = entity.get("visualIdentity", {}) or entity.get("coverArt", {})
+    thumb_url = None
+    if isinstance(visual, dict):
+        sources = visual.get("sources", []) or visual.get("image", [])
+        if sources:
+            thumb_url = sources[0].get("url")
+    return artist, track_name, thumb_url
+
+
 async def download_spotify(
     url: str,
     tmpdir: Path,
@@ -331,19 +329,25 @@ async def download_spotify(
     if entity_type == "track":
         if on_progress:
             await on_progress("Getting Spotify track info...")
-        data = await _spotify_partner("getTrack", {
-            "uri": f"spotify:track:{entity_id}",
-        })
-        t = data["data"]["trackUnion"]
-        track_name = t.get("name", "")
-        artists_list = []
-        for src in ("firstArtist", "otherArtists"):
-            for a in t.get(src, {}).get("items", []):
-                if a.get("profile", {}).get("name"):
-                    artists_list.append(a["profile"]["name"])
-        artist = ", ".join(artists_list)
-        cover_sources = t.get("albumOfTrack", {}).get("coverArt", {}).get("sources", [])
-        thumb_url = _best_image(cover_sources) or None
+        try:
+            data = await _spotify_partner("getTrack", {
+                "uri": f"spotify:track:{entity_id}",
+            })
+            t = data.get("data", {}).get("trackUnion", {})
+            if t.get("__typename") == "NotFound":
+                raise RuntimeError("Трек не найден в Spotify (возможно, битая ссылка или трек заблокирован)")
+            track_name = t.get("name", "")
+            artists_list = []
+            for src in ("firstArtist", "otherArtists"):
+                for a in t.get(src, {}).get("items", []):
+                    if a.get("profile", {}).get("name"):
+                        artists_list.append(a["profile"]["name"])
+            artist = ", ".join(artists_list)
+            cover_sources = t.get("albumOfTrack", {}).get("coverArt", {}).get("sources", [])
+            thumb_url = _best_image(cover_sources) or None
+        except Exception as err:
+            log.warning("Spotify partner API getTrack failed (%s), falling back to embed page...", err)
+            artist, track_name, thumb_url = await _get_track_meta_embed(entity_id)
         if not track_name or not artist:
             raise RuntimeError(
                 f"Could not get track info: artist={artist!r} title={track_name!r}"
