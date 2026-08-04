@@ -149,6 +149,18 @@ def _progress_hook(
     return hook
 
 
+def _postprocessor_hook(cb: Callable[[str], None]):
+    """Build a yt-dlp postprocessor hook callback."""
+    def hook(d: dict):
+        if d.get("status") == "started":
+            pp = d.get("postprocessor", "")
+            if pp in ("FFmpegExtractAudio", "FFmpegVideoConvertor"):
+                cb("⚙️ Конвертация (FFmpeg)...")
+            elif pp == "FFmpegMetadata":
+                cb("🏷 Запись метаданных и обложки...")
+    return hook
+
+
 def _embed_cover_flac(media_file: Path, thumb_file: Path) -> None:
     """Embed image cover art into FLAC audio file metadata."""
     try:
@@ -385,6 +397,7 @@ async def download_ytdlp(
         "writethumbnail": True,
         "postprocessors": postprocessors,
         "progress_hooks": [_progress_hook(sync_cb, should_cancel=should_cancel, max_bytes=max_bytes)],
+        "postprocessor_hooks": [_postprocessor_hook(sync_cb)],
         "postprocessor_args": postprocessor_args,
     }
     if is_search:
