@@ -132,7 +132,7 @@ def _patch_ffmpeg_progress():
         def _get_file_duration(filepath: str) -> float:
             try:
                 cmd = ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", str(filepath)]
-                res = subprocess.check_output(cmd, text=True, stderr=subprocess.DEVNULL).strip()
+                res = subprocess.check_output(cmd, text=True, stderr=subprocess.DEVNULL, errors="replace").strip()
                 return float(res)
             except Exception:
                 return 0.0
@@ -174,6 +174,7 @@ def _patch_ffmpeg_progress():
                 stderr=subprocess.PIPE,
                 stdin=subprocess.PIPE,
                 text=True,
+                errors="replace",
                 bufsize=1
             )
             
