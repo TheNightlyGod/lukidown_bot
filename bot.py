@@ -495,6 +495,7 @@ async def send_result(chat_id: int, result, status_msg: Message, url: str | None
     """Send downloaded media result file to specified Telegram chat."""
     cap = _caption(result, url, lang=lang)
     fp = result.filepath
+    thumb = result.thumbnail
     thumb_path = None
     if thumb and thumb.exists() and thumb.stat().st_size > 0:
         thumb_path = str(thumb)
