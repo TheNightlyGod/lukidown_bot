@@ -511,7 +511,7 @@ async def send_result(chat_id: int, result, status_msg: Message, url: str | None
                 pct = (current / total * 100) if total else 0
                 size_cur = _human_size(current)
                 size_tot = _human_size(total) if total else "?"
-                text = f"📤 Отправляю... {pct:.0f}% ({size_cur} / {size_tot})"
+                text = f"Отправляю... {pct:.0f}% ({size_cur} / {size_tot})"
                 await _safe_edit(status_msg, text)
         except Exception as p_err:
             log.debug("upload_progress edit ignored error: %s", p_err)

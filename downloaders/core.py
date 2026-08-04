@@ -189,7 +189,7 @@ def _patch_ffmpeg_progress():
                         if now - last_update[0] >= 1.0 or (duration > 0 and sec >= duration):
                             last_update[0] = now
                             pct = (sec / duration * 100.0) if duration > 0 else 0.0
-                            msg = f"⚙️ Конвертация (FFmpeg)... {pct:.0f}%" if duration > 0 else f"⚙️ Конвертация (FFmpeg)... {sec:.0f}s"
+                            msg = f"Конвертация (FFmpeg)... {pct:.0f}%" if duration > 0 else f"Конвертация (FFmpeg)... {sec:.0f}s"
                             if self._downloader and hasattr(self._downloader, "_progress_hooks"):
                                 for h in self._downloader._progress_hooks:
                                     try:
@@ -228,7 +228,7 @@ def _progress_hook(
         if should_cancel and should_cancel():
             raise DownloadCancelled("download cancelled")
         if d.get("status") == "processing_ffmpeg":
-            cb(d.get("text", "⚙️ Конвертация (FFmpeg)..."))
+            cb(d.get("text", "Конвертация (FFmpeg)..."))
             return
         if d.get("status") != "downloading":
             return
@@ -262,9 +262,9 @@ def _postprocessor_hook(cb: Callable[[str], None]):
         if d.get("status") == "started":
             pp = d.get("postprocessor", "")
             if pp in ("FFmpegExtractAudio", "FFmpegVideoConvertor"):
-                cb("⚙️ Конвертация (FFmpeg)...")
+                cb("Конвертация (FFmpeg)...")
             elif pp == "FFmpegMetadata":
-                cb("🏷 Запись метаданных и обложки...")
+                cb("Запись метаданных и обложки...")
     return hook
 
 
