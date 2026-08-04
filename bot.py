@@ -513,7 +513,7 @@ async def send_result(chat_id: int, result, status_msg: Message, url: str | None
                 size_tot = _human_size(total) if total else "?"
                 text = f"Отправляю... {pct:.0f}% ({size_cur} / {size_tot})"
                 await _safe_edit(status_msg, text)
-        except Exception as p_err:
+        except Exception as p_err: # noqa: BLE001
             log.debug("upload_progress edit ignored error: %s", p_err)
 
     await _safe_edit(status_msg, get_text(lang, "sending_file"))
@@ -538,7 +538,7 @@ async def send_result(chat_id: int, result, status_msg: Message, url: str | None
                 kwargs["thumb"] = thumb_path
             try:
                 sent_message = await app.send_audio(**kwargs)
-            except Exception as err:
+            except Exception as err: # noqa: BLE001
                 log.warning("send_audio failed (%s), retrying without thumb & progress...", err)
                 kwargs.pop("thumb", None)
                 kwargs.pop("progress", None)
@@ -564,7 +564,7 @@ async def send_result(chat_id: int, result, status_msg: Message, url: str | None
                 kwargs["duration"] = v_duration
             try:
                 sent_message = await app.send_video(**kwargs)
-            except Exception as err:
+            except Exception as err: # noqa: BLE001
                 log.warning("send_video failed (%s), retrying without thumb & progress...", err)
                 kwargs.pop("thumb", None)
                 kwargs.pop("progress", None)
@@ -579,7 +579,7 @@ async def send_result(chat_id: int, result, status_msg: Message, url: str | None
                     parse_mode=ParseMode.MARKDOWN,
                     progress=upload_progress,
                 )
-            except Exception as err:
+            except Exception as err: # noqa: BLE001
                 log.warning("send_photo failed (%s), retrying without progress...", err)
                 sent_message = await app.send_photo(
                     chat_id,
@@ -600,7 +600,7 @@ async def send_result(chat_id: int, result, status_msg: Message, url: str | None
                 kwargs["thumb"] = thumb_path
             try:
                 sent_message = await app.send_document(**kwargs)
-            except Exception as err:
+            except Exception as err: # noqa: BLE001
                 log.warning("send_document failed (%s), retrying without thumb & progress...", err)
                 kwargs.pop("thumb", None)
                 kwargs.pop("progress", None)

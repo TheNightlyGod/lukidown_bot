@@ -2,7 +2,6 @@
 
 import asyncio
 import logging
-import os
 import re
 import time
 from collections.abc import Awaitable, Callable
@@ -123,10 +122,11 @@ def _patch_ffmpeg_progress():
         return
     _ffmpeg_patched = True
     try:
+        import itertools
         import os
         import subprocess
-        import itertools
-        import yt_dlp.postprocessor.ffmpeg as ffmpeg
+
+        from yt_dlp.postprocessor import ffmpeg
         from yt_dlp.utils import encodeArgument, variadic
 
         def _get_file_duration(filepath: str) -> float:
@@ -134,7 +134,7 @@ def _patch_ffmpeg_progress():
                 cmd = ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", str(filepath)]
                 res = subprocess.check_output(cmd, text=True, stderr=subprocess.DEVNULL).strip()
                 return float(res)
-            except Exception:
+            except Exception: # noqa: BLE001
                 return 0.0
 
         def patched_real_run_ffmpeg(self, input_path_opts, output_path_opts, *, expected_retcodes=(0,)):
@@ -195,7 +195,7 @@ def _patch_ffmpeg_progress():
                                     try:
                                         h({"status": "processing_ffmpeg", "text": msg})
                                     except Exception:
-                                        pass
+                                        log.debug("ffmpeg error", exc_info=True)
 
             stderr_out = proc.stderr.read()
             returncode = proc.wait()
@@ -210,7 +210,7 @@ def _patch_ffmpeg_progress():
             return stderr_out
 
         ffmpeg.FFmpegPostProcessor.real_run_ffmpeg = patched_real_run_ffmpeg
-    except Exception as e:
+    except Exception as e: # noqa: BLE001
         log.warning("Failed to patch FFmpeg progress: %s", e)
 
 
