@@ -34,6 +34,7 @@ from downloaders import (
     get_available_video_heights,
     list_episodes,
 )
+from downloaders.core import _human_size
 from health import init as health_init
 from health import start_health_server
 from i18n import EMOJI_RU, EMOJI_US, get_text
@@ -243,15 +244,15 @@ def _caption(result, url: str | None = None, lang: str = "ru") -> str:
         lines = [title_part]
     if getattr(result, "converted", False):
         lines.append(get_text(lang, "format_converted"))
-    lines.append("@lukidown_bot")
+    lines.append("@SaZaNDownloader_bot")
     return "\n".join(lines)
 
 def _cache_caption(entry: CacheEntry, lang: str = "ru") -> str:
     title_part = _title_with_link(entry.title or "", entry.source_url, lang=lang)
     performer = entry.performer
     if performer and performer not in IGNORED_PERFORMERS:
-        return f"**{_md_escape(performer)}** - {title_part}\n@lukidown_bot"
-    return f"{title_part}\n@lukidown_bot"
+        return f"**{_md_escape(performer)}** - {title_part}\n@SaZaNDownloader_bot"
+    return f"{title_part}\n@SaZaNDownloader_bot"
 
 async def _probe_video_metadata(filepath: Path) -> tuple[int, int, int]:
     """Retrieve (width, height, duration) using ffprobe."""
@@ -494,8 +495,24 @@ async def send_result(chat_id: int, result, status_msg: Message, url: str | None
     """Send downloaded media result file to specified Telegram chat."""
     cap = _caption(result, url, lang=lang)
     fp = result.filepath
-    thumb = result.thumbnail
-    thumb_path = str(thumb) if thumb and thumb.exists() else None
+    thumb_path = None
+    if thumb and thumb.exists() and thumb.stat().st_size > 0:
+        thumb_path = str(thumb)
+
+    last_up = [0.0]
+
+    async def upload_progress(current: int, total: int):
+        try:
+            now = time.time()
+            if now - last_up[0] >= 2.5 or current == total:
+                last_up[0] = now
+                pct = (current / total * 100) if total else 0
+                size_cur = _human_size(current)
+                size_tot = _human_size(total) if total else "?"
+                text = f"📤 Отправляю... {pct:.0f}% ({size_cur} / {size_tot})"
+                await _safe_edit(status_msg, text)
+        except Exception as p_err:
+            log.debug("upload_progress edit ignored error: %s", p_err)
 
     await _safe_edit(status_msg, get_text(lang, "sending_file"))
 
@@ -509,6 +526,7 @@ async def send_result(chat_id: int, result, status_msg: Message, url: str | None
                 "audio": str(fp),
                 "caption": cap,
                 "parse_mode": ParseMode.MARKDOWN,
+                "progress": upload_progress,
             }
             if result.uploader:
                 kwargs["performer"] = result.uploader
@@ -516,7 +534,13 @@ async def send_result(chat_id: int, result, status_msg: Message, url: str | None
                 kwargs["title"] = result.title
             if thumb_path:
                 kwargs["thumb"] = thumb_path
-            sent_message = await app.send_audio(**kwargs)
+            try:
+                sent_message = await app.send_audio(**kwargs)
+            except Exception as err:
+                log.warning("send_audio failed (%s), retrying without thumb & progress...", err)
+                kwargs.pop("thumb", None)
+                kwargs.pop("progress", None)
+                sent_message = await app.send_audio(**kwargs)
             media_type = "audio"
         elif suffix in (".mp4", ".mkv", ".webm", ".mov", ".avi"):
             v_width, v_height, v_duration, v_thumb = await _ensure_video_info(fp, result)
@@ -526,8 +550,9 @@ async def send_result(chat_id: int, result, status_msg: Message, url: str | None
                 "caption": cap,
                 "supports_streaming": True,
                 "parse_mode": ParseMode.MARKDOWN,
+                "progress": upload_progress,
             }
-            if v_thumb:
+            if v_thumb and Path(v_thumb).exists() and Path(v_thumb).stat().st_size > 0:
                 kwargs["thumb"] = str(v_thumb)
             if v_width > 0:
                 kwargs["width"] = v_width
@@ -535,15 +560,31 @@ async def send_result(chat_id: int, result, status_msg: Message, url: str | None
                 kwargs["height"] = v_height
             if v_duration > 0:
                 kwargs["duration"] = v_duration
-            sent_message = await app.send_video(**kwargs)
+            try:
+                sent_message = await app.send_video(**kwargs)
+            except Exception as err:
+                log.warning("send_video failed (%s), retrying without thumb & progress...", err)
+                kwargs.pop("thumb", None)
+                kwargs.pop("progress", None)
+                sent_message = await app.send_video(**kwargs)
             media_type = "video"
         elif suffix in (".jpg", ".jpeg", ".png", ".webp"):
-            sent_message = await app.send_photo(
-                chat_id,
-                photo=str(fp),
-                caption=cap,
-                parse_mode=ParseMode.MARKDOWN,
-            )
+            try:
+                sent_message = await app.send_photo(
+                    chat_id,
+                    photo=str(fp),
+                    caption=cap,
+                    parse_mode=ParseMode.MARKDOWN,
+                    progress=upload_progress,
+                )
+            except Exception as err:
+                log.warning("send_photo failed (%s), retrying without progress...", err)
+                sent_message = await app.send_photo(
+                    chat_id,
+                    photo=str(fp),
+                    caption=cap,
+                    parse_mode=ParseMode.MARKDOWN,
+                )
             media_type = "photo"
         else:
             kwargs = {
@@ -551,19 +592,30 @@ async def send_result(chat_id: int, result, status_msg: Message, url: str | None
                 "document": str(fp),
                 "caption": cap,
                 "parse_mode": ParseMode.MARKDOWN,
+                "progress": upload_progress,
             }
             if thumb_path:
                 kwargs["thumb"] = thumb_path
-            sent_message = await app.send_document(**kwargs)
+            try:
+                sent_message = await app.send_document(**kwargs)
+            except Exception as err:
+                log.warning("send_document failed (%s), retrying without thumb & progress...", err)
+                kwargs.pop("thumb", None)
+                kwargs.pop("progress", None)
+                sent_message = await app.send_document(**kwargs)
             media_type = "document"
     except Exception as e:  # noqa: BLE001
-        log.warning("send as media failed, fallback to document: %s", e)
-        sent_message = await app.send_document(
-            chat_id,
-            document=str(fp),
-            caption=cap,
-            parse_mode=ParseMode.MARKDOWN,
-        )
+        log.warning("send as media failed, fallback to raw document: %s", e)
+        try:
+            sent_message = await app.send_document(
+                chat_id,
+                document=str(fp),
+                caption=cap,
+                parse_mode=ParseMode.MARKDOWN,
+            )
+        except Exception as fallback_err:
+            log.error("Final fallback send_document failed: %s", fallback_err)
+            raise
         media_type = "document"
 
     await _safe_delete(status_msg)
