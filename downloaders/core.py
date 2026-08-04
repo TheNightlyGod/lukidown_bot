@@ -113,6 +113,108 @@ def _base_ydl_opts() -> dict:
     return opts
 
 
+_ffmpeg_patched = False
+
+
+def _patch_ffmpeg_progress():
+    global _ffmpeg_patched
+    if _ffmpeg_patched:
+        return
+    _ffmpeg_patched = True
+    try:
+        import subprocess
+        import itertools
+        import yt_dlp.postprocessor.ffmpeg as ffmpeg
+        from yt_dlp.utils import encodeArgument, variadic
+
+        def _get_file_duration(filepath: str) -> float:
+            try:
+                cmd = ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", str(filepath)]
+                res = subprocess.check_output(cmd, text=True, stderr=subprocess.DEVNULL).strip()
+                return float(res)
+            except Exception:
+                return 0.0
+
+        def patched_real_run_ffmpeg(self, input_path_opts, output_path_opts, *, expected_retcodes=(0,)):
+            cmd = [self.executable, encodeArgument("-y"), encodeArgument("-progress"), encodeArgument("pipe:1")]
+            if self.basename == "ffmpeg":
+                cmd += [encodeArgument("-loglevel"), encodeArgument("repeat+info")]
+
+            oldest_mtime = min(os.stat(path).st_mtime for path, _ in input_path_opts if path)
+
+            duration = 0.0
+            for path, _ in input_path_opts:
+                if path and os.path.exists(path):
+                    duration = _get_file_duration(path)
+                    if duration > 0:
+                        break
+
+            def make_args(file, args, name, number):
+                keys = [f"_{name}{number}", f"_{name}"]
+                if name == "o":
+                    args += ["-movflags", "+faststart"]
+                    if number == 1:
+                        keys.append("")
+                args += self._configuration_args(self.basename, keys)
+                if name == "i":
+                    args.append("-i")
+                return [encodeArgument(arg) for arg in args] + [self._ffmpeg_filename_argument(file)]
+
+            for arg_type, path_opts in (("i", input_path_opts), ("o", output_path_opts)):
+                cmd += itertools.chain.from_iterable(
+                    make_args(path, list(opts), arg_type, i + 1)
+                    for i, (path, opts) in enumerate(path_opts) if path
+                )
+
+            proc = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                stdin=subprocess.PIPE,
+                text=True,
+                bufsize=1
+            )
+            
+            last_update = [0.0]
+
+            for line in proc.stdout:
+                line = line.strip()
+                if line.startswith("out_time_us="):
+                    us_str = line.split("=")[1].strip()
+                    if us_str.isdigit():
+                        sec = float(us_str) / 1_000_000.0
+                        now = time.time()
+                        if now - last_update[0] >= 1.0 or (duration > 0 and sec >= duration):
+                            last_update[0] = now
+                            pct = (sec / duration * 100.0) if duration > 0 else 0.0
+                            msg = f"⚙️ Конвертация (FFmpeg)... {pct:.0f}%" if duration > 0 else f"⚙️ Конвертация (FFmpeg)... {sec:.0f}s"
+                            if self._downloader and hasattr(self._downloader, "_progress_hooks"):
+                                for h in self._downloader._progress_hooks:
+                                    try:
+                                        h({"status": "processing_ffmpeg", "text": msg})
+                                    except Exception:
+                                        pass
+
+            stderr_out = proc.stderr.read()
+            returncode = proc.wait()
+
+            if returncode not in variadic(expected_retcodes):
+                self.write_debug(stderr_out)
+                raise ffmpeg.FFmpegPostProcessorError(stderr_out.strip().splitlines()[-1] if stderr_out else "FFmpeg error")
+
+            for out_path, _ in output_path_opts:
+                if out_path:
+                    self.try_utime(out_path, oldest_mtime, oldest_mtime)
+            return stderr_out
+
+        ffmpeg.FFmpegPostProcessor.real_run_ffmpeg = patched_real_run_ffmpeg
+    except Exception as e:
+        log.warning("Failed to patch FFmpeg progress: %s", e)
+
+
+_patch_ffmpeg_progress()
+
+
 def _progress_hook(
         cb: Callable[[str], None],
         should_cancel: CancelCheck | None = None,
@@ -123,7 +225,10 @@ def _progress_hook(
     def hook(d: dict):
         if should_cancel and should_cancel():
             raise DownloadCancelled("download cancelled")
-        if d["status"] != "downloading":
+        if d.get("status") == "processing_ffmpeg":
+            cb(d.get("text", "⚙️ Конвертация (FFmpeg)..."))
+            return
+        if d.get("status") != "downloading":
             return
         total = d.get("total_bytes") or d.get("total_bytes_estimate", 0)
         if max_bytes and total and total > max_bytes:
