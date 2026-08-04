@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import os
 import re
 import time
 from collections.abc import Awaitable, Callable
@@ -122,6 +123,7 @@ def _patch_ffmpeg_progress():
         return
     _ffmpeg_patched = True
     try:
+        import os
         import subprocess
         import itertools
         import yt_dlp.postprocessor.ffmpeg as ffmpeg
