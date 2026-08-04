@@ -505,7 +505,7 @@ async def send_result(chat_id: int, result, status_msg: Message, url: str | None
     async def upload_progress(current: int, total: int):
         try:
             now = time.time()
-            if now - last_up[0] >= 2.5 or current == total:
+            if now - last_up[0] >= 1.0 or current == total:
                 last_up[0] = now
                 pct = (current / total * 100) if total else 0
                 size_cur = _human_size(current)
