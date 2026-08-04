@@ -95,7 +95,7 @@ class _SpotifyTokenCache:
 
         self._access_token = access_token
         self._client_token = ""
-        self._expires_at = time.time() + 50 * 60
+        self._expires_at = time.time() + 15 * 60
 
 _spotify_tokens = _SpotifyTokenCache()
 
@@ -108,7 +108,7 @@ _SPOTIFY_HASHES = {
 _SPOTIFY_APP_VERSION = "896000000"
 
 
-async def _spotify_partner(operation: str, variables: dict, retry_on_401: bool = True) -> dict:
+async def _spotify_partner(operation: str, variables: dict, retry_on_token_error: bool = True) -> dict:
     """Call Spotify partner GraphQL endpoint."""
     payload = {
         "variables": variables,
@@ -123,7 +123,6 @@ async def _spotify_partner(operation: str, variables: dict, retry_on_401: bool =
     await _spotify_tokens.ensure_fresh_async()
     headers = {
         "Authorization": f"Bearer {_spotify_tokens.access_token}",
-        "client-token": _spotify_tokens.client_token,
         "Content-Type": "application/json;charset=UTF-8",
         "Accept": "application/json",
         "Accept-Language": "ru",
@@ -133,6 +132,8 @@ async def _spotify_partner(operation: str, variables: dict, retry_on_401: bool =
         "Referer": "https://open.spotify.com/",
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36",
     }
+    if _spotify_tokens.client_token:
+        headers["client-token"] = _spotify_tokens.client_token
     client = await get_http_client(enable_proxy=False)
     try:
         resp = await client.post(_SPOTIFY_PARTNER_URL, headers=headers, content=json.dumps(payload), timeout=30.0)
@@ -150,20 +151,23 @@ async def _spotify_partner(operation: str, variables: dict, retry_on_401: bool =
         ) from e
     if not isinstance(data, dict):
         raise TypeError(f"Spotify API returned unexpected format: {data}")
-    is_401 = resp.status_code == 401
+    is_token_error = resp.status_code in (400, 401)
     err_obj = data.get("error", {})
     if isinstance(err_obj, dict) and (
-        err_obj.get("status") == 401 or "expired" in str(err_obj).lower() or "token" in str(err_obj).lower()
+        err_obj.get("status") in (400, 401)
+        or "expired" in str(err_obj).lower()
+        or "token" in str(err_obj).lower()
+        or "bad request" in str(err_obj).lower()
     ):
-        is_401 = True
-    if is_401:
-        if retry_on_401:
-            log.warning("Spotify API 401 error. Refreshing token cache and retrying...")
+        is_token_error = True
+    if is_token_error:
+        if retry_on_token_error:
+            log.warning("Spotify API error (HTTP %s, %s). Refreshing token cache and retrying...", resp.status_code, err_obj)
             _spotify_tokens.invalidate()
             await _spotify_tokens.ensure_fresh_async()
-            return await _spotify_partner(operation, variables, retry_on_401=False)
+            return await _spotify_partner(operation, variables, retry_on_token_error=False)
         else:
-            raise RuntimeError("Spotify API access token is invalid or expired after refresh.")
+            raise RuntimeError(f"Spotify API access token error after refresh (HTTP {resp.status_code}): {data}")
     if "errors" in data:
         raise RuntimeError(f"Spotify partner API error: {data['errors']}")
     if "data" not in data or not isinstance(data["data"], dict):
