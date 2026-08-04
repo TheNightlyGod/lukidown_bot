@@ -351,10 +351,15 @@ async def get_available_video_heights(url: str) -> list[int]:
     """
     loop = asyncio.get_event_loop()
     def _run():
-        opts = {**_base_ydl_opts(), "skip_download": True}
+        opts = {**_base_ydl_opts(), "skip_download": True, "playlist_items": "1"}
         with yt_dlp.YoutubeDL(opts) as ydl:
             info = ydl.extract_info(url, download=False)
-            formats = info.get("formats", [])
+            if not info:
+                return []
+            if info.get("_type") == "playlist" and info.get("entries"):
+                formats = info["entries"][0].get("formats", []) if info["entries"] else []
+            else:
+                formats = info.get("formats", [])
             return sorted(
                 {
                     int(f["height"])
@@ -381,12 +386,18 @@ async def get_available_audio_codecs(url: str) -> set[str]:
     """
     loop = asyncio.get_event_loop()
     def _run():
-        opts = {**_base_ydl_opts(), "skip_download": True}
+        opts = {**_base_ydl_opts(), "skip_download": True, "playlist_items": "1"}
         with yt_dlp.YoutubeDL(opts) as ydl:
             info = ydl.extract_info(url, download=False)
+            if not info:
+                return set()
+            if info.get("_type") == "playlist" and info.get("entries"):
+                formats = info["entries"][0].get("formats", []) if info["entries"] else []
+            else:
+                formats = info.get("formats", [])
             return {
                 f["acodec"].split(".")[0].lower()
-                for f in info.get("formats", [])
+                for f in formats
                 if f.get("acodec") and f["acodec"] != "none"
             }
     try:
