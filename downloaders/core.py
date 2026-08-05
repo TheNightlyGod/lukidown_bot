@@ -98,6 +98,9 @@ def _base_ydl_opts() -> dict:
         "quiet": True,
         "no_warnings": True,
         "noplaylist": True,
+        "socket_timeout": 15,
+        "retries": 3,
+        "fragment_retries": 3,
         "remote_components": ["ejs:github"],
         "http_headers": {
             "User-Agent": (
