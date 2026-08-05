@@ -446,6 +446,36 @@ class QueueManager:
         self._cancel_set.discard(user_id)
         await self.redis.delete(CANCEL_FLAG_KEY.format(user_id=user_id))
 
+    async def get_task_position(self, task_id: str) -> tuple[int, int]:
+        """Get 1-based queue position and total length for a given task ID."""
+        items = await self.redis.lrange(QUEUE_KEY, 0, -1)
+        total = len(items)
+        for idx, raw in enumerate(items):
+            try:
+                payload = json.loads(raw)
+                if payload.get("task_id") == task_id:
+                    return idx + 1, total
+            except Exception: # noqa: BLE001
+                log.debug("Error getting task position")
+                continue
+        return 1, max(total, 1)
+
+    async def get_all_queued_tasks(self) -> list[QueueTask]:
+        """Fetch all currently queued task objects from Redis."""
+        items = await self.redis.lrange(QUEUE_KEY, 0, -1)
+        tasks: list[QueueTask] = []
+        for raw in items:
+            try:
+                tasks.append(QueueTask.from_payload(json.loads(raw)))
+            except Exception: # noqa: BLE001
+                log.debug("Error parsing task payload: %s", raw)
+                continue
+        return tasks
+
+    async def recover_stale_tasks(self) -> None:
+        """Clean up orphaned active tasks and reset processing counts on startup."""
+        await self.redis.set(PROCESSING_COUNT_KEY, 0)
+
 
 class PendingStore:
     """Redis-backed store for user format selection state."""
@@ -498,6 +528,7 @@ class MediaService:
         """Initialize database storage schema and verify Redis connection."""
         await self.storage.init()
         await self.redis.ping()
+        await self.queue.recover_stale_tasks()
 
     async def close(self) -> None:
         """Shut down background worker tasks and close Redis and DB connections."""
