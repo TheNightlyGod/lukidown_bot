@@ -50,6 +50,9 @@ STRINGS: dict[str, dict[str, str]] = {
         "cancel_no_active": "Сейчас для тебя нет активной загрузки.",
         "cancel_downloading": "Скачивание отменяется...",
         "cancel_done": "Загрузка отменена.",
+        "queue_position": "В очереди: место #{pos} (всего задач в очереди: {total})\nПожалуйста, подождите...",
+        "task_processing_started": "Начинаю обработку...",
+        "download_timeout": "Превышено время ожидания скачивания (тайм-аут). Сервер недоступен или файл слишком долго скачивался. Попробуйте еще раз.",
         "saves_empty": "Здесь появятся последние сохранённые файлы.",
         "saves_header": "Твои последние {limit} сохранений:",
         "search_usage": (
@@ -153,6 +156,9 @@ STRINGS: dict[str, dict[str, str]] = {
         "cancel_no_active": "No active download found for you right now.",
         "cancel_downloading": "Download is being cancelled...",
         "cancel_done": "Download cancelled.",
+        "queue_position": "Queued: position #{pos} (total in queue: {total})\nPlease wait...",
+        "task_processing_started": "Starting processing...",
+        "download_timeout": "Download request timed out. The source server may be unavailable or file download took too long. Please try again.",
         "saves_empty": "Your recent saved files will appear here.",
         "saves_header": "Your last {limit} saves:",
         "search_usage": (
