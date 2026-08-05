@@ -639,6 +639,24 @@ async def _try_send_cached(chat_id: int, user_id: int, media_key: str, status_ms
     return True
 
 
+async def _update_waiting_queue_positions():
+    """Periodically update waiting status messages with their current position in queue."""
+    try:
+        tasks = await media_service.queue.get_all_queued_tasks()
+        total = len(tasks)
+        for idx, task in enumerate(tasks, start=1):
+            try:
+                status_msg = await app.get_messages(task.status_chat_id, task.status_message_id)
+                if status_msg:
+                    user_lang = (await media_service.storage.get_user_language(task.user_id)) or "ru"
+                    text = get_text(user_lang, "queue_position", pos=idx, total=total)
+                    await _safe_edit(status_msg, text, reply_markup=_keyboard_cancel(user_lang))
+            except Exception: # noqa: BLE001
+                log.debug("update_waiting_queue_positions failed (%s)", task)
+    except Exception as e: # noqa: BLE001
+        log.warning("Error updating queue positions: %s", e)
+
+
 async def _enqueue_download(
         *,
         chat_id: int,
@@ -694,6 +712,14 @@ async def _enqueue_download(
         translation_id=translation_id,
     )
     await media_service.queue.enqueue(task)
+    user_lang = (await media_service.storage.get_user_language(user_id)) or "ru"
+    pos, total = await media_service.queue.get_task_position(task.task_id)
+    if pos > 1:
+        text = get_text(user_lang, "queue_position", pos=pos, total=total)
+        await _safe_edit(status_msg, text, reply_markup=_keyboard_cancel(user_lang))
+    else:
+        text = get_text(user_lang, "task_processing_started")
+        await _safe_edit(status_msg, text, reply_markup=_keyboard_cancel(user_lang))
 
 
 async def _process_queued_download(task: QueueTask):
@@ -702,8 +728,13 @@ async def _process_queued_download(task: QueueTask):
     status_msg = await app.get_messages(task.status_chat_id, task.status_message_id)
     user_lang = (await media_service.storage.get_user_language(task.user_id)) or "ru"
 
+    if status_msg:
+        await _safe_edit(status_msg, get_text(user_lang, "task_processing_started"), reply_markup=_keyboard_cancel(user_lang))
+    asyncio.create_task(_update_waiting_queue_positions())
+
     if task.media_key and await _try_send_cached(task.chat_id, task.user_id, task.media_key, status_msg=status_msg, lang=user_lang):
         await media_service.queue.clear_active(task.user_id, task.task_id)
+        asyncio.create_task(_update_waiting_queue_positions())
         return
 
     last_progress = [""]
@@ -718,49 +749,53 @@ async def _process_queued_download(task: QueueTask):
 
     result = None
     try:
-        result = await download(
-            url=task.url,
-            platform=Platform(task.platform),
-            want_audio=task.want_audio,
-            on_progress=on_progress,
-            audio_format=task.audio_format,
-            video_quality=task.video_quality,
-            artist_track_name=task.search_query,
-            music_title=task.music_title,
-            music_artist=task.music_artist,
-            should_cancel=should_cancel,
-            season=task.season,
-            episode=task.episode,
-            translation_id=task.translation_id,
-            lang=user_lang,
-        )
-        sent_message, media_type = await send_result(task.chat_id, result, status_msg, url=task.url, lang=user_lang)
+        async with asyncio.timeout(config.TASK_TIMEOUT_SECONDS):
+            result = await download(
+                url=task.url,
+                platform=Platform(task.platform),
+                want_audio=task.want_audio,
+                on_progress=on_progress,
+                audio_format=task.audio_format,
+                video_quality=task.video_quality,
+                artist_track_name=task.search_query,
+                music_title=task.music_title,
+                music_artist=task.music_artist,
+                should_cancel=should_cancel,
+                season=task.season,
+                episode=task.episode,
+                translation_id=task.translation_id,
+                lang=user_lang,
+            )
+            sent_message, media_type = await send_result(task.chat_id, result, status_msg, url=task.url, lang=user_lang)
 
-        if sent_message and task.media_key:
-            file_id = None
-            if media_type == "audio" and sent_message.audio:
-                file_id = sent_message.audio.file_id
-            elif media_type == "video" and sent_message.video:
-                file_id = sent_message.video.file_id
-            elif media_type == "photo" and sent_message.photo:
-                file_id = sent_message.photo.file_id
-            elif sent_message.document:
-                file_id = sent_message.document.file_id
+            if sent_message and task.media_key:
+                file_id = None
+                if media_type == "audio" and sent_message.audio:
+                    file_id = sent_message.audio.file_id
+                elif media_type == "video" and sent_message.video:
+                    file_id = sent_message.video.file_id
+                elif media_type == "photo" and sent_message.photo:
+                    file_id = sent_message.photo.file_id
+                elif sent_message.document:
+                    file_id = sent_message.document.file_id
 
-            if file_id:
-                performer = result.uploader or task.music_artist
-                title = result.title or task.music_title
-                media_format = task.audio_format if task.want_audio else task.video_quality
-                await media_service.storage.save_cache(
-                    media_key=task.media_key,
-                    file_id=file_id,
-                    media_type=media_type,
-                    media_format=media_format,
-                    title=title,
-                    performer=performer,
-                    source_url=task.url,
-                )
-                await media_service.storage.add_history(task.user_id, task.media_key)
+                if file_id:
+                    performer = result.uploader or task.music_artist
+                    title = result.title or task.music_title
+                    media_format = task.audio_format if task.want_audio else task.video_quality
+                    await media_service.storage.save_cache(
+                        media_key=task.media_key,
+                        file_id=file_id,
+                        media_type=media_type,
+                        media_format=media_format,
+                        title=title,
+                        performer=performer,
+                        source_url=task.url,
+                    )
+                    await media_service.storage.add_history(task.user_id, task.media_key)
+    except TimeoutError:
+        log.warning("Download task %s timed out after %s seconds", task.task_id, config.TASK_TIMEOUT_SECONDS)
+        await _safe_edit(status_msg, get_text(user_lang, "download_timeout"))
     except DownloadCancelled:
         await media_service.queue.clear_cancel(task.user_id)
         await _safe_edit(status_msg, get_text(user_lang, "cancel_done"))
@@ -774,6 +809,7 @@ async def _process_queued_download(task: QueueTask):
         await media_service.queue.clear_active(task.user_id, task.task_id)
         if result and result.filepath and result.filepath.exists():
             cleanup(result.filepath)
+        asyncio.create_task(_update_waiting_queue_positions())
 
 
 async def _run_worker(worker_no: int):
