@@ -28,12 +28,17 @@ VK_USER_AGENT = (
 
 async def _vk_api_request(url: str, params: dict) -> dict:
     """Perform HTTP POST request to VK API and return parsed JSON."""
-    client = await get_http_client()
+    client = await get_http_client(enable_proxy=True)
     headers = {"User-Agent": VK_USER_AGENT}
     try:
-        resp = await client.post(url, headers=headers, data=params, timeout=30.0)
-    except httpx.HTTPError as e:
-        raise RuntimeError(f"VK API request failed: {e}") from e
+        resp = await client.post(url, headers=headers, data=params, timeout=15.0)
+    except httpx.HTTPError:
+        # Fallback to direct connection without proxy if proxy timed out or failed
+        direct_client = await get_http_client(enable_proxy=False)
+        try:
+            resp = await direct_client.post(url, headers=headers, data=params, timeout=15.0)
+        except httpx.HTTPError as e:
+            raise RuntimeError(f"VK API request failed: {e}") from e
     try:
         return resp.json()
     except json.JSONDecodeError as e:
