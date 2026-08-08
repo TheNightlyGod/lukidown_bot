@@ -113,6 +113,7 @@ STRINGS: dict[str, dict[str, str]] = {
         "dl_deezer_search": "Ищу трек в Deezer...",
         "dl_apple_search": "Ищу трек в Apple Music...",
         "dl_format_converted": "Запрошенный формат недоступен, конвертирую из лучшего доступного...",
+        "dl_yt_search_fallback": "Поиск на YouTube не дал результатов, пробую SoundCloud...",
     },
     "en": {
         "select_language_prompt": "**Please select your language / Пожалуйста, выберите язык:**",
@@ -219,6 +220,7 @@ STRINGS: dict[str, dict[str, str]] = {
         "dl_deezer_search": "Searching track in Deezer...",
         "dl_apple_search": "Searching track in Apple Music...",
         "dl_format_converted": "Required format not available, converting from best available...",
+        "dl_yt_search_fallback": "YouTube search gave no results, searching on SoundCloud...",
     },
 }
 
