@@ -180,7 +180,7 @@ def _patch_ffmpeg_progress():
                 errors="replace",
                 bufsize=1
             )
-            
+
             last_update = [0.0]
 
             for line in proc.stdout:
@@ -704,7 +704,7 @@ async def _download_track_search(
             thumb_url=thumb_url,
             should_cancel=should_cancel,
         )
-    except Exception as err:
+    except Exception as err: # noqa: BLE001
         log.warning("YouTube search failed for %r (%s), trying SoundCloud fallback...", query_str, err)
         if on_progress:
             await on_progress(get_text(lang, "dl_yt_search_fallback"))
@@ -712,8 +712,8 @@ async def _download_track_search(
             try:
                 if item.is_file():
                     item.unlink()
-            except Exception:
-                pass
+            except Exception: # noqa: BLE001
+                log.debug("Failed to unlink %r", item)
         return await download_ytdlp(
             f"scsearch1:{query_str}",
             want_audio=True,
