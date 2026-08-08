@@ -180,7 +180,7 @@ def _patch_ffmpeg_progress():
                 errors="replace",
                 bufsize=1
             )
-            
+
             last_update = [0.0]
 
             for line in proc.stdout:
@@ -687,19 +687,44 @@ async def _download_track_search(
         audio_format: str = "mp3_192",
         thumb_url: str | None = None,
         should_cancel: CancelCheck | None = None,
+        lang: str = "ru",
 ) -> DownloadResult:
-    """Download audio track by querying YouTube search with artist and title."""
-    return await download_ytdlp(
-        f"ytsearch1:{artist} - {title}",
-        want_audio=True,
-        tmpdir=tmpdir,
-        on_progress=on_progress,
-        audio_format=audio_format,
-        music_artist=artist,
-        music_title=title,
-        thumb_url=thumb_url,
-        should_cancel=should_cancel,
-    )
+    """Download audio track by querying search engines (YouTube primary, SoundCloud fallback)."""
+    from i18n import get_text
+    query_str = f"{artist} - {title}"
+    try:
+        return await download_ytdlp(
+            f"ytsearch1:{query_str}",
+            want_audio=True,
+            tmpdir=tmpdir,
+            on_progress=on_progress,
+            audio_format=audio_format,
+            music_artist=artist,
+            music_title=title,
+            thumb_url=thumb_url,
+            should_cancel=should_cancel,
+        )
+    except Exception as err: # noqa: BLE001
+        log.warning("YouTube search failed for %r (%s), trying SoundCloud fallback...", query_str, err)
+        if on_progress:
+            await on_progress(get_text(lang, "dl_yt_search_fallback"))
+        for item in tmpdir.iterdir():
+            try:
+                if item.is_file():
+                    item.unlink()
+            except Exception: # noqa: BLE001
+                log.debug("Failed to unlink %r", item)
+        return await download_ytdlp(
+            f"scsearch1:{query_str}",
+            want_audio=True,
+            tmpdir=tmpdir,
+            on_progress=on_progress,
+            audio_format=audio_format,
+            music_artist=artist,
+            music_title=title,
+            thumb_url=thumb_url,
+            should_cancel=should_cancel,
+        )
 
 
 async def download_simple(url: str, tmpdir: Path, on_progress: ProgressCallback | None = None,
@@ -735,6 +760,7 @@ async def download_deezer(
         on_progress: ProgressCallback | None = None,
         audio_format: str = "mp3_192",
         should_cancel: CancelCheck | None = None,
+        lang: str = "ru",
 ) -> DownloadResult:
     """Download audio for Deezer link by resolving metadata and searching YouTube."""
     if on_progress:
@@ -746,6 +772,7 @@ async def download_deezer(
         on_progress=on_progress,
         audio_format=audio_format,
         should_cancel=should_cancel,
+        lang=lang,
     )
 
 
@@ -755,6 +782,7 @@ async def download_apple_music(
         on_progress: ProgressCallback | None = None,
         audio_format: str = "mp3_192",
         should_cancel: CancelCheck | None = None,
+        lang: str = "ru",
 ) -> DownloadResult:
     """Download audio for Apple Music link by resolving metadata and searching YouTube."""
     if on_progress:
@@ -766,6 +794,7 @@ async def download_apple_music(
         on_progress=on_progress,
         audio_format=audio_format,
         should_cancel=should_cancel,
+        lang=lang,
     )
 
 

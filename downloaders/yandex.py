@@ -56,6 +56,7 @@ async def download_yandex(
         on_progress: ProgressCallback | None = None,
         audio_format: str = "mp3_192",
         should_cancel: CancelCheck | None = None,
+        lang: str = "ru",
 ) -> DownloadResult:
     """Download single Yandex Music track.
 
@@ -65,6 +66,7 @@ async def download_yandex(
         on_progress: Async callback function for progress updates.
         audio_format: Selected audio codec/format string.
         should_cancel: Cancellation condition predicate.
+        lang: User language code for localization.
 
     Returns:
         DownloadResult containing media file path and metadata.
@@ -120,6 +122,7 @@ async def download_yandex(
         audio_format=audio_format,
         thumb_url=f"https://{cover_uri}" if cover_uri else None,
         should_cancel=should_cancel,
+        lang=lang,
     )
 
 

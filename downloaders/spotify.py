@@ -316,6 +316,7 @@ async def download_spotify(
     on_progress: ProgressCallback | None = None,
     audio_format: str = "mp3_192",
     should_cancel: CancelCheck | None = None,
+    lang: str = "ru",
 ) -> DownloadResult:
     """Download Spotify track, album, or playlist.
 
@@ -325,6 +326,7 @@ async def download_spotify(
         on_progress: Async callback for status updates.
         audio_format: Codec/bitrate selection key.
         should_cancel: Cancellation condition check function.
+        lang: User language code for localization.
 
     Returns:
         DownloadResult containing media file path or ZIP archive path.
@@ -364,6 +366,7 @@ async def download_spotify(
             audio_format=audio_format,
             thumb_url=thumb_url,
             should_cancel=should_cancel,
+            lang=lang,
         )
     if on_progress:
         await on_progress("Getting Spotify track list...")
@@ -384,6 +387,7 @@ async def download_spotify(
             audio_format=audio_format,
             thumb_url=thumb,
             should_cancel=should_cancel,
+            lang=lang,
         )
 
     return await _process_collection_tracks(
