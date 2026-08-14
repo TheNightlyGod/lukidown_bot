@@ -104,6 +104,12 @@ async def handle_health(request: web.Request) -> web.Response:
     db_status, db_detail = await _check_database()
     dl_status, dl_detail = await _check_downloader()
 
+    try:
+        from bot import get_reconnect_status
+        reconnect_detail = get_reconnect_status()
+    except Exception as e:  # noqa: BLE001
+        reconnect_detail = {"error": f"reconnect status unavailable: {e}"}
+
     all_ok = all(s == "OK" for s in (tg_status, db_status, dl_status))
     overall = "OK" if all_ok else "DEGRADED"
 
@@ -118,6 +124,7 @@ async def handle_health(request: web.Request) -> web.Response:
             "telegram": tg_detail,
             "database": db_detail,
             "downloader": dl_detail,
+            "reconnect": reconnect_detail,
         },
     }
 
