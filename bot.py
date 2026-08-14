@@ -53,6 +53,28 @@ config.validate()
 MAIN_LOOP = asyncio.new_event_loop()
 asyncio.set_event_loop(MAIN_LOOP)
 
+
+def _loop_exception_handler(loop: asyncio.AbstractEventLoop, context: dict) -> None:
+    """Log otherwise-swallowed exceptions from orphaned asyncio tasks.
+
+    Pyrogram's Session.restart() sometimes raises inside a task nobody
+    awaits (e.g. after "Server sent a null packet"). By default that
+    exception is only logged to the 'asyncio' logger (often invisible
+    with our formatting/level) and the client can end up "connected"
+    but silently unable to receive new updates. Routing it through our
+    own logger makes that failure visible instead of silent.
+    """
+    message = context.get("message")
+    exception = context.get("exception")
+    log.error("Unhandled asyncio exception: %s | context=%s", message, context, exc_info=exception)
+
+
+MAIN_LOOP.set_exception_handler(_loop_exception_handler)
+
+WATCHDOG_INTERVAL_SECONDS = 300
+WATCHDOG_PROBE_TIMEOUT_SECONDS = 30
+WATCHDOG_MAX_FAILURES = 2
+
 app = Client(
     "mediabot",
     api_id=config.API_ID,
@@ -1490,6 +1512,134 @@ async def on_chosen_inline_result(client: Client, chosen: ChosenInlineResult):
         )
 
 
+async def _connectivity_watchdog() -> None:
+    """Periodically verify that the client can actually round-trip a request.
+
+    This only catches a genuinely dead connection (socket gone, auth
+    broken, etc.) — a successful get_me() proves outbound RPC still
+    works, nothing more. It will NOT detect the pts/seq desync bug
+    handled by _force_clean_reconnect below, since that leaves outbound
+    RPCs completely healthy while only inbound update delivery breaks.
+    Kept as a secondary safety net for the "actually dead" case.
+    """
+    consecutive_failures = 0
+    while True:
+        await asyncio.sleep(WATCHDOG_INTERVAL_SECONDS)
+        try:
+            await asyncio.wait_for(app.get_me(), timeout=WATCHDOG_PROBE_TIMEOUT_SECONDS)
+            if consecutive_failures:
+                log.info("Watchdog probe recovered after %d failure(s)", consecutive_failures)
+            consecutive_failures = 0
+        except Exception as e:  # noqa: BLE001
+            consecutive_failures += 1
+            log.error(
+                "Watchdog probe failed (%d/%d): %s",
+                consecutive_failures,
+                WATCHDOG_MAX_FAILURES,
+                e,
+            )
+            if consecutive_failures >= WATCHDOG_MAX_FAILURES:
+                log.error(
+                    "Client appears unresponsive after %d consecutive failed probes — "
+                    "force-restarting process for a clean reconnect.",
+                    consecutive_failures,
+                )
+                import os
+                os._exit(1)
+
+SESSION_RESTART_COOLDOWN_SECONDS = 60
+SESSION_RESTART_GRACE_SECONDS = 10
+SESSION_RESTART_TIMEOUT_SECONDS = 60
+
+
+class _SessionRestartWatcher(logging.Handler):
+    """Detect pyrogram's own "Restarting session due to ..." log line and
+    force a full, clean Client restart shortly afterwards.
+
+    Why: pyrogram does not implement pts/seq gap-detection and
+    updates.getDifference resync the way e.g. Telethon does — it just
+    applies whatever raw Update constructs arrive on the socket. After a
+    forced reconnect (like "Server sent a null packet"), the update
+    sequence can end up desynced with the server, and Telegram simply
+    stops pushing new updates to that session — while outbound RPC calls
+    (ping, get_me, ...) keep working perfectly, since they use the same
+    socket but don't depend on pts continuity. There's no cheap way to
+    query "am I still receiving pushes" from the outside, so instead we
+    react to the one reliable symptom we do have: the reconnect itself.
+    A full Client.stop() + Client.start() forces a brand-new
+    updates.getState() handshake, which resyncs from scratch.
+    """
+
+    def __init__(self, on_trigger):
+        super().__init__(level=logging.INFO)
+        self._on_trigger = on_trigger
+
+    def emit(self, record: logging.LogRecord) -> None:
+        try:
+            msg = record.getMessage()
+        except Exception:  # noqa: BLE001
+            return
+        if "Restarting session" in msg:
+            try:
+                asyncio.run_coroutine_threadsafe(self._on_trigger(), MAIN_LOOP)
+            except RuntimeError:
+                # Loop not running (e.g. during shutdown) — nothing to do.
+                pass
+
+
+_session_restart_lock = asyncio.Lock()
+_last_forced_restart_at = 0.0
+
+
+async def _force_clean_reconnect() -> None:
+    global _last_forced_restart_at
+
+    if _session_restart_lock.locked():
+        return
+
+    now = time.monotonic()
+    if now - _last_forced_restart_at < SESSION_RESTART_COOLDOWN_SECONDS:
+        return
+
+    async with _session_restart_lock:
+        _last_forced_restart_at = time.monotonic()
+        await asyncio.sleep(SESSION_RESTART_GRACE_SECONDS)
+        log.warning(
+            "Forcing full Client restart after internal session restart, "
+            "to resync update delivery (pyrogram doesn't do this itself)."
+        )
+        try:
+            async with asyncio.timeout(SESSION_RESTART_TIMEOUT_SECONDS):
+                await app.stop()
+                await app.start()
+            log.info("Client restarted cleanly; updates should resync via a fresh getState().")
+        except Exception as e:  # noqa: BLE001
+            log.error(
+                "Forced clean restart failed (%s) — client is unrecoverable in-process, "
+                "exiting for the process supervisor to restart us.",
+                e,
+            )
+            import os
+            os._exit(1)
+
+
+logging.getLogger("pyrogram.session.session").addHandler(_SessionRestartWatcher(_force_clean_reconnect))
+
+
+def get_reconnect_status() -> dict:
+    """Expose forced-reconnect bookkeeping for health.py to surface in /health.
+
+    seconds_since_last_forced_restart == None means it never had to fire
+    since process start, which is the healthy/normal case.
+    """
+    if _last_forced_restart_at == 0.0:
+        return {"seconds_since_last_forced_restart": None, "restart_in_progress": _session_restart_lock.locked()}
+    return {
+        "seconds_since_last_forced_restart": round(time.monotonic() - _last_forced_restart_at),
+        "restart_in_progress": _session_restart_lock.locked(),
+    }
+
+
 async def main():
     """Main application entry point for service startup and bot client execution."""
     log.info("starting mediabot")
@@ -1499,10 +1649,12 @@ async def main():
 
     health_init(app, media_service)
     health_runner = await start_health_server(host="0.0.0.0", port=8080)
+    watchdog_task = asyncio.ensure_future(_connectivity_watchdog())
 
     try:
         await idle()
     finally:
+        watchdog_task.cancel()
         await health_runner.cleanup()
         await app.stop()
         await media_service.close()
