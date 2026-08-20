@@ -102,6 +102,11 @@ def _base_ydl_opts() -> dict:
         "retries": 3,
         "fragment_retries": 3,
         "remote_components": ["ejs:github"],
+        "extractor_args": {
+            "youtube": {
+                "player_client": ["web_safari", "web_embedded", "-tv_downgraded"],
+            }
+        },
         "http_headers": {
             "User-Agent": (
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
