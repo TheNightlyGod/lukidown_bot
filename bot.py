@@ -1553,8 +1553,8 @@ SESSION_RESTART_TIMEOUT_SECONDS = 60
 
 
 class _SessionRestartWatcher(logging.Handler):
-    """Detect pyrogram's own "Restarting session due to ..." log line and
-    force a full, clean Client restart shortly afterwards.
+    """Detect pyrogram's own "Restarting session due to ..." log line on the main session
+    and force a clean container restart.
 
     Why: pyrogram does not implement pts/seq gap-detection and
     updates.getDifference resync the way e.g. Telethon does — it just
@@ -1566,8 +1566,8 @@ class _SessionRestartWatcher(logging.Handler):
     socket but don't depend on pts continuity. There's no cheap way to
     query "am I still receiving pushes" from the outside, so instead we
     react to the one reliable symptom we do have: the reconnect itself.
-    A full Client.stop() + Client.start() forces a brand-new
-    updates.getState() handshake, which resyncs from scratch.
+    A full container restart forces a brand-new updates.getState() handshake,
+    which resyncs everything cleanly from scratch without in-process issues.
     """
 
     def __init__(self, on_trigger):
@@ -1580,47 +1580,47 @@ class _SessionRestartWatcher(logging.Handler):
         except Exception:  # noqa: BLE001
             return
         if "Restarting session" in msg:
+            if self._is_media_session():
+                return
             try:
                 asyncio.run_coroutine_threadsafe(self._on_trigger(), MAIN_LOOP)
             except RuntimeError:
                 # Loop not running (e.g. during shutdown) — nothing to do.
                 pass
 
+    def _is_media_session(self) -> bool:
+        try:
+            import inspect
+            frame = inspect.currentframe()
+            while frame:
+                self_obj = frame.f_locals.get("self")
+                if self_obj.__class__.__name__ == "Session" and self_obj.__class__.__module__.startswith("pyrogram"):
+                    return getattr(self_obj, "is_media", False)
+                frame = frame.f_back
+        except Exception:  # noqa: BLE001, S110
+            pass
+        return False
 
-_session_restart_lock = asyncio.Lock()
+
 _last_forced_restart_at = 0.0
 
 
 async def _force_clean_reconnect() -> None:
     global _last_forced_restart_at
 
-    if _session_restart_lock.locked():
-        return
-
     now = time.monotonic()
     if now - _last_forced_restart_at < SESSION_RESTART_COOLDOWN_SECONDS:
         return
+    _last_forced_restart_at = now
 
-    async with _session_restart_lock:
-        _last_forced_restart_at = time.monotonic()
-        await asyncio.sleep(SESSION_RESTART_GRACE_SECONDS)
-        log.warning(
-            "Forcing full Client restart after internal session restart, "
-            "to resync update delivery (pyrogram doesn't do this itself)."
-        )
-        try:
-            async with asyncio.timeout(SESSION_RESTART_TIMEOUT_SECONDS):
-                await app.stop()
-                await app.start()
-            log.info("Client restarted cleanly; updates should resync via a fresh getState().")
-        except Exception as e:  # noqa: BLE001
-            log.error(
-                "Forced clean restart failed (%s) — client is unrecoverable in-process, "
-                "exiting for the process supervisor to restart us.",
-                e,
-            )
-            import os
-            os._exit(1)
+    log.warning(
+        "Forcing full process restart after internal main session restart, "
+        "to resync update delivery."
+    )
+    # Give it a tiny bit of time for logs to flush
+    await asyncio.sleep(1)
+    import os
+    os._exit(1)
 
 
 logging.getLogger("pyrogram.session.session").addHandler(_SessionRestartWatcher(_force_clean_reconnect))
@@ -1633,10 +1633,10 @@ def get_reconnect_status() -> dict:
     since process start, which is the healthy/normal case.
     """
     if _last_forced_restart_at == 0.0:
-        return {"seconds_since_last_forced_restart": None, "restart_in_progress": _session_restart_lock.locked()}
+        return {"seconds_since_last_forced_restart": None, "restart_in_progress": False}
     return {
         "seconds_since_last_forced_restart": round(time.monotonic() - _last_forced_restart_at),
-        "restart_in_progress": _session_restart_lock.locked(),
+        "restart_in_progress": False,
     }
 
 
@@ -1647,7 +1647,7 @@ async def main():
     media_service.start_workers(_process_queued_download)
     await app.start()
 
-    health_init(app, media_service)
+    health_init(app, media_service, get_reconnect_status)
     health_runner = await start_health_server(host="0.0.0.0", port=8080)
     watchdog_task = asyncio.ensure_future(_connectivity_watchdog())
 

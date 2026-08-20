@@ -9,18 +9,21 @@ log = logging.getLogger("mediabot.health")
 
 _app_ref = None
 _service_ref = None
+_reconnect_status_fn = None
 
 
-def init(app, service):
+def init(app, service, reconnect_status_fn=None):
     """Initialize references to the Pyrogram Client app and ServiceContext.
 
     Args:
         app: Pyrogram Client instance.
         service: ServiceContext instance containing database and queue handles.
+        reconnect_status_fn: Optional callback function returning reconnect status dictionary.
     """
-    global _app_ref, _service_ref
+    global _app_ref, _service_ref, _reconnect_status_fn
     _app_ref = app
     _service_ref = service
+    _reconnect_status_fn = reconnect_status_fn
 
 
 async def _check_telegram() -> tuple[str, dict]:
@@ -104,11 +107,13 @@ async def handle_health(request: web.Request) -> web.Response:
     db_status, db_detail = await _check_database()
     dl_status, dl_detail = await _check_downloader()
 
-    try:
-        from bot import get_reconnect_status
-        reconnect_detail = get_reconnect_status()
-    except Exception as e:  # noqa: BLE001
-        reconnect_detail = {"error": f"reconnect status unavailable: {e}"}
+    if _reconnect_status_fn:
+        try:
+            reconnect_detail = _reconnect_status_fn()
+        except Exception as e:  # noqa: BLE001
+            reconnect_detail = {"error": f"reconnect status callback failed: {e}"}
+    else:
+        reconnect_detail = {"seconds_since_last_forced_restart": None, "restart_in_progress": False}
 
     all_ok = all(s == "OK" for s in (tg_status, db_status, dl_status))
     overall = "OK" if all_ok else "DEGRADED"
