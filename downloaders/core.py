@@ -92,7 +92,7 @@ def _is_format_unavailable(error: Exception) -> bool:
     return "Requested format is not available" in str(error)
 
 
-def _base_ydl_opts() -> dict:
+def _base_ydl_opts(url: str | None = None, proxy: str | None = None, is_ru: bool = False) -> dict:
     """Construct baseline YoutubeDL options dictionary."""
     opts = {
         "quiet": True,
@@ -118,6 +118,16 @@ def _base_ydl_opts() -> dict:
     cookie_path = Path("cookies.txt")
     if cookie_path.exists() and cookie_path.stat().st_size > 0:
         opts["cookiefile"] = str(cookie_path)
+
+    if proxy:
+        opts["proxy"] = proxy if "://" in proxy else f"socks5://{proxy}"
+    else:
+        from platforms import is_russian_platform
+        target_is_ru = is_ru or (url is not None and is_russian_platform(url=url))
+        proxy_raw = config.RU_PROXY if target_is_ru else config.SOCKS5_PROXY
+        if proxy_raw:
+            opts["proxy"] = proxy_raw if "://" in proxy_raw else f"socks5://{proxy_raw}"
+
     return opts
 
 
@@ -383,7 +393,7 @@ async def get_available_video_heights(url: str) -> list[int]:
     """
     loop = asyncio.get_event_loop()
     def _run():
-        opts = {**_base_ydl_opts(), "skip_download": True, "playlist_items": "1"}
+        opts = {**_base_ydl_opts(url=url), "skip_download": True, "playlist_items": "1"}
         with yt_dlp.YoutubeDL(opts) as ydl:
             info = ydl.extract_info(url, download=False)
             if not info:
@@ -418,7 +428,7 @@ async def get_available_audio_codecs(url: str) -> set[str]:
     """
     loop = asyncio.get_event_loop()
     def _run():
-        opts = {**_base_ydl_opts(), "skip_download": True, "playlist_items": "1"}
+        opts = {**_base_ydl_opts(url=url), "skip_download": True, "playlist_items": "1"}
         with yt_dlp.YoutubeDL(opts) as ydl:
             info = ydl.extract_info(url, download=False)
             if not info:
@@ -542,7 +552,7 @@ async def download_ytdlp(
     max_bytes = config.MAX_FILE_SIZE_MB * 1024 * 1024
     is_search = url.startswith(("ytsearch", "ytmusicsearch", "gvsearch", "yvsearch", "scsearch"))
     common_opts = {
-        **_base_ydl_opts(),
+        **_base_ydl_opts(url=url),
         "outtmpl": str(tmpdir / "%(id)s.%(ext)s"),
         "writethumbnail": True,
         "postprocessors": postprocessors,
@@ -555,7 +565,7 @@ async def download_ytdlp(
 
     ydl_opts = {**common_opts, "format": fmt}
     def _get_info(opts: dict):
-        preflight = {**_base_ydl_opts(), "skip_download": True, "format": opts.get("format", "best")}
+        preflight = {**_base_ydl_opts(url=url), "skip_download": True, "format": opts.get("format", "best")}
         if is_search:
             preflight["noplaylist"] = False
         with yt_dlp.YoutubeDL(preflight) as ydl:
@@ -767,7 +777,7 @@ download_tenor = download_jiosaavn = download_twitch = download_snapchat = downl
 async def download_reddit(url: str, tmpdir: Path, on_progress: ProgressCallback | None = None,
                            should_cancel: CancelCheck | None = None) -> DownloadResult:
     """Download Reddit media using configured session cookies."""
-    ydl_opts = {**_base_ydl_opts(), "http_headers": {"Cookie": config.REDDIT_COOKIE}}
+    ydl_opts = {**_base_ydl_opts(url=url), "http_headers": {"Cookie": config.REDDIT_COOKIE}}
     loop = asyncio.get_event_loop()
     def _run():
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
