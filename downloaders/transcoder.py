@@ -207,13 +207,13 @@ async def compress_video(
                 pass
             try:
                 await proc.wait()
-            except Exception:
+            except Exception:  # noqa: BLE001, S110
                 pass
         if not stderr_task.done():
             stderr_task.cancel()
             try:
                 await stderr_task
-            except (asyncio.CancelledError, Exception):
+            except (asyncio.CancelledError, Exception):  # noqa: BLE001, S110
                 pass
 
     rc = await proc.wait()

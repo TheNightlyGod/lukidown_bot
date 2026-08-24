@@ -195,7 +195,7 @@ def _patch_ffmpeg_progress():
                         stderr_lines.append(s_line)
                         if len(stderr_lines) > 50:
                             stderr_lines.pop(0)
-                except Exception:
+                except Exception:  # noqa: BLE001, S110
                     pass
 
             stderr_thread = threading.Thread(target=_drain_stderr, daemon=True)
@@ -225,7 +225,7 @@ def _patch_ffmpeg_progress():
                 if proc.poll() is None:
                     try:
                         proc.kill()
-                    except Exception:
+                    except Exception:  # noqa: BLE001, S110
                         pass
                 stderr_thread.join(timeout=2.0)
 

@@ -319,7 +319,7 @@ async def _probe_video_metadata(filepath: Path) -> tuple[int, int, int]:
         if proc and proc.returncode is None:
             try:
                 proc.kill()
-            except Exception:
+            except Exception:  # noqa: BLE001, S110
                 pass
     return width, height, duration
 
@@ -381,7 +381,7 @@ async def _ensure_video_info(filepath: Path, result) -> tuple[int, int, int, Pat
                 if proc and proc.returncode is None:
                     try:
                         proc.kill()
-                    except Exception:
+                    except Exception:  # noqa: BLE001, S110
                         pass
 
     return width, height, duration, thumb_path
@@ -1636,7 +1636,7 @@ async def _on_client_connect(client: Client, session):
         try:
             from pyrogram import raw
             await client.invoke(raw.functions.updates.GetState())
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             log.warning("updates.GetState failed on connect: %s", e)
 
 app.connect_handler = _on_client_connect
