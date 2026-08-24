@@ -133,6 +133,7 @@ def _patch_ffmpeg_progress():
         import itertools
         import os
         import subprocess
+        import threading
 
         from yt_dlp.postprocessor import ffmpeg
         from yt_dlp.utils import encodeArgument, variadic
@@ -180,34 +181,56 @@ def _patch_ffmpeg_progress():
                 cmd,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-                stdin=subprocess.PIPE,
+                stdin=subprocess.DEVNULL,
                 text=True,
                 errors="replace",
                 bufsize=1
             )
 
+            stderr_lines: list[str] = []
+
+            def _drain_stderr():
+                try:
+                    for s_line in proc.stderr:
+                        stderr_lines.append(s_line)
+                        if len(stderr_lines) > 50:
+                            stderr_lines.pop(0)
+                except Exception:
+                    pass
+
+            stderr_thread = threading.Thread(target=_drain_stderr, daemon=True)
+            stderr_thread.start()
+
             last_update = [0.0]
 
-            for line in proc.stdout:
-                line = line.strip()
-                if line.startswith("out_time_us="):
-                    us_str = line.split("=")[1].strip()
-                    if us_str.isdigit():
-                        sec = float(us_str) / 1_000_000.0
-                        now = time.time()
-                        if now - last_update[0] >= 1.0 or (duration > 0 and sec >= duration):
-                            last_update[0] = now
-                            pct = (sec / duration * 100.0) if duration > 0 else 0.0
-                            msg = f"Конвертация (FFmpeg)... {pct:.0f}%" if duration > 0 else f"Конвертация (FFmpeg)... {sec:.0f}s"
-                            if self._downloader and hasattr(self._downloader, "_progress_hooks"):
-                                for h in self._downloader._progress_hooks:
-                                    try:
-                                        h({"status": "processing_ffmpeg", "text": msg})
-                                    except Exception:
-                                        log.debug("ffmpeg error", exc_info=True)
+            try:
+                for line in proc.stdout:
+                    line = line.strip()
+                    if line.startswith("out_time_us="):
+                        us_str = line.split("=")[1].strip()
+                        if us_str.isdigit():
+                            sec = float(us_str) / 1_000_000.0
+                            now = time.time()
+                            if now - last_update[0] >= 1.0 or (duration > 0 and sec >= duration):
+                                last_update[0] = now
+                                pct = (sec / duration * 100.0) if duration > 0 else 0.0
+                                msg = f"Конвертация (FFmpeg)... {pct:.0f}%" if duration > 0 else f"Конвертация (FFmpeg)... {sec:.0f}s"
+                                if self._downloader and hasattr(self._downloader, "_progress_hooks"):
+                                    for h in self._downloader._progress_hooks:
+                                        try:
+                                            h({"status": "processing_ffmpeg", "text": msg})
+                                        except Exception:
+                                            log.debug("ffmpeg error", exc_info=True)
+            finally:
+                if proc.poll() is None:
+                    try:
+                        proc.kill()
+                    except Exception:
+                        pass
+                stderr_thread.join(timeout=2.0)
 
-            stderr_out = proc.stderr.read()
             returncode = proc.wait()
+            stderr_out = "".join(stderr_lines)
 
             if returncode not in variadic(expected_retcodes):
                 self.write_debug(stderr_out)

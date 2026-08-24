@@ -289,13 +289,14 @@ async def _probe_video_metadata(filepath: Path) -> tuple[int, int, int]:
         str(filepath),
     ]
     width, height, duration = 0, 0, 0
+    proc = None
     try:
         proc = await asyncio.create_subprocess_exec(
             *cmd,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        stdout, _ = await proc.communicate()
+        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=15.0)
         if proc.returncode == 0 and stdout:
             data = json.loads(stdout.decode())
             streams = data.get("streams", [])
@@ -315,6 +316,11 @@ async def _probe_video_metadata(filepath: Path) -> tuple[int, int, int]:
                     pass
     except Exception as e:  # noqa: BLE001
         log.warning("ffprobe metadata extraction failed for %s: %s", filepath, e)
+        if proc and proc.returncode is None:
+            try:
+                proc.kill()
+            except Exception:
+                pass
     return width, height, duration
 
 
@@ -358,19 +364,25 @@ async def _ensure_video_info(filepath: Path, result) -> tuple[int, int, int, Pat
                 "-q:v", "2",
                 str(gen_thumb),
             ]
+            proc = None
             try:
                 proc = await asyncio.create_subprocess_exec(
                     *cmd,
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE,
                 )
-                await proc.communicate()
+                await asyncio.wait_for(proc.communicate(), timeout=15.0)
                 if proc.returncode == 0 and gen_thumb.exists() and gen_thumb.stat().st_size > 0:
                     thumb_path = gen_thumb
                     if hasattr(result, "thumbnail"):
                         result.thumbnail = gen_thumb
             except Exception as e:  # noqa: BLE001
                 log.warning("Failed to generate video thumbnail for %s: %s", filepath, e)
+                if proc and proc.returncode is None:
+                    try:
+                        proc.kill()
+                    except Exception:
+                        pass
 
     return width, height, duration, thumb_path
 
@@ -1404,9 +1416,8 @@ async def on_inline_query(client, iq):
     await iq.answer(results, cache_time=0, is_personal=True)
 
 
-@app.on_chosen_inline_result()
-async def on_chosen_inline_result(client: Client, chosen: ChosenInlineResult):
-    """Handle chosen inline result to download and serve inline query selection."""
+async def _process_chosen_inline(client: Client, chosen: ChosenInlineResult):
+    """Execute chosen inline result download in background task."""
     if not chosen.inline_message_id or not (chosen.result_id.startswith("af_") or chosen.result_id.startswith("vf_")):
         return
 
@@ -1512,21 +1523,26 @@ async def on_chosen_inline_result(client: Client, chosen: ChosenInlineResult):
         )
 
 
-async def _connectivity_watchdog() -> None:
-    """Periodically verify that the client can actually round-trip a request.
+@app.on_chosen_inline_result()
+async def on_chosen_inline_result(client: Client, chosen: ChosenInlineResult):
+    """Handle chosen inline result by offloading download to a background task."""
+    asyncio.create_task(_process_chosen_inline(client, chosen))
 
-    This only catches a genuinely dead connection (socket gone, auth
-    broken, etc.) — a successful get_me() proves outbound RPC still
-    works, nothing more. It will NOT detect the pts/seq desync bug
-    handled by _force_clean_reconnect below, since that leaves outbound
-    RPCs completely healthy while only inbound update delivery breaks.
-    Kept as a secondary safety net for the "actually dead" case.
-    """
+
+WATCHDOG_INTERVAL_SECONDS = 60
+WATCHDOG_PROBE_TIMEOUT_SECONDS = 15
+WATCHDOG_MAX_FAILURES = 2
+
+
+async def _connectivity_watchdog() -> None:
+    """Periodically verify that the client can round-trip RPC and sync updates."""
+    from pyrogram import raw
     consecutive_failures = 0
     while True:
         await asyncio.sleep(WATCHDOG_INTERVAL_SECONDS)
         try:
             await asyncio.wait_for(app.get_me(), timeout=WATCHDOG_PROBE_TIMEOUT_SECONDS)
+            await asyncio.wait_for(app.invoke(raw.functions.updates.GetState()), timeout=WATCHDOG_PROBE_TIMEOUT_SECONDS)
             if consecutive_failures:
                 log.info("Watchdog probe recovered after %d failure(s)", consecutive_failures)
             consecutive_failures = 0
@@ -1555,19 +1571,6 @@ SESSION_RESTART_TIMEOUT_SECONDS = 60
 class _SessionRestartWatcher(logging.Handler):
     """Detect pyrogram's own "Restarting session due to ..." log line on the main session
     and force a clean container restart.
-
-    Why: pyrogram does not implement pts/seq gap-detection and
-    updates.getDifference resync the way e.g. Telethon does — it just
-    applies whatever raw Update constructs arrive on the socket. After a
-    forced reconnect (like "Server sent a null packet"), the update
-    sequence can end up desynced with the server, and Telegram simply
-    stops pushing new updates to that session — while outbound RPC calls
-    (ping, get_me, ...) keep working perfectly, since they use the same
-    socket but don't depend on pts continuity. There's no cheap way to
-    query "am I still receiving pushes" from the outside, so instead we
-    react to the one reliable symptom we do have: the reconnect itself.
-    A full container restart forces a brand-new updates.getState() handshake,
-    which resyncs everything cleanly from scratch without in-process issues.
     """
 
     def __init__(self, on_trigger):
@@ -1624,6 +1627,19 @@ async def _force_clean_reconnect() -> None:
 
 
 logging.getLogger("pyrogram.session.session").addHandler(_SessionRestartWatcher(_force_clean_reconnect))
+
+
+async def _on_client_connect(client: Client, session):
+    """Ensure update delivery state is refreshed whenever the main session connects."""
+    if not getattr(session, "is_media", False):
+        log.info("Main session connected; requesting updates state...")
+        try:
+            from pyrogram import raw
+            await client.invoke(raw.functions.updates.GetState())
+        except Exception as e:
+            log.warning("updates.GetState failed on connect: %s", e)
+
+app.connect_handler = _on_client_connect
 
 
 def get_reconnect_status() -> dict:

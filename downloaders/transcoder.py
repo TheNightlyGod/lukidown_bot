@@ -200,7 +200,21 @@ async def compress_video(
                         get_text(lang, "compression_working", out_time=out_time_str, size=_human_size(curr_size))
                     )
     finally:
-        await stderr_task
+        if proc.returncode is None:
+            try:
+                proc.kill()
+            except ProcessLookupError:
+                pass
+            try:
+                await proc.wait()
+            except Exception:
+                pass
+        if not stderr_task.done():
+            stderr_task.cancel()
+            try:
+                await stderr_task
+            except (asyncio.CancelledError, Exception):
+                pass
 
     rc = await proc.wait()
     if rc != 0:
