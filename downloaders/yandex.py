@@ -18,7 +18,7 @@ from downloaders.http import get_http_client
 
 async def _yandex_api_request(url: str, params: dict | None = None) -> str:
     """Send HTTP request to Yandex Music API and return raw response string."""
-    client = await get_http_client()
+    client = await get_http_client(enable_proxy=True, is_ru=True)
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         "Accept-Language": "ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7",
@@ -29,8 +29,15 @@ async def _yandex_api_request(url: str, params: dict | None = None) -> str:
             resp = await client.post(url, headers=headers, data=params, timeout=30.0)
         else:
             resp = await client.get(url, headers=headers, timeout=30.0)
-    except httpx.HTTPError as e:
-        raise RuntimeError(f"HTTP request failed: {e}") from e
+    except httpx.HTTPError:
+        direct_client = await get_http_client(enable_proxy=False)
+        try:
+            if params:
+                resp = await direct_client.post(url, headers=headers, data=params, timeout=30.0)
+            else:
+                resp = await direct_client.get(url, headers=headers, timeout=30.0)
+        except httpx.HTTPError as e:
+            raise RuntimeError(f"HTTP request failed: {e}") from e
     return resp.text
 
 

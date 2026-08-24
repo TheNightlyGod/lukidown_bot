@@ -174,7 +174,7 @@ async def get_kinopoisk_meta(kp_id: str) -> dict:
         "User-Agent": UA,
     }
     try:
-        client = await get_http_client()
+        client = await get_http_client(enable_proxy=True, is_ru=True)
         r = await client.get(url, headers=headers, timeout=10)
         if r.status_code == 200:
             return r.json()
@@ -193,7 +193,7 @@ async def get_players(kinopoisk_id: str, retries: int = 3, delay: float = 2.0) -
     """Get player iframe endpoints for Kinopoisk content."""
     url = f"https://p.linkpp.ink/api/players?kinopoisk={kinopoisk_id}"
     last_err = None
-    client = await get_http_client()
+    client = await get_http_client(enable_proxy=True, is_ru=True)
     for attempt in range(retries):
         try:
             r = await client.get(url, timeout=15, headers={"User-Agent": UA})
@@ -310,7 +310,7 @@ def get_episode_entry(
 
 async def _fetch_iframe_data(target_iframe_url: str) -> tuple[dict, str]:
     """Fetch iframe HTML and extract file_list and meta_wl via HTTP without Playwright."""
-    client = await get_http_client()
+    client = await get_http_client(enable_proxy=True, is_ru=True)
     headers = {
         "User-Agent": UA,
         "Referer": "https://linkpp.ink/",
@@ -392,7 +392,7 @@ async def extract_kinopoisk_stream(
     episode_id = entry["id"]
     borth_value = make_borth(meta_wl)
 
-    client = await get_http_client()
+    client = await get_http_client(enable_proxy=True, is_ru=True)
     post_headers = {
         "User-Agent": UA,
         "accept": "*/*",
@@ -476,9 +476,16 @@ async def download_kinopoisk(
         "ffmpeg",
         "-y",
         "-loglevel", "error",
+    ]
+    ru_proxy = config.RU_PROXY
+    if ru_proxy:
+        proxy_url = ru_proxy if "://" in ru_proxy else f"http://{ru_proxy}"
+        if proxy_url.startswith(("http://", "https://")):
+            cmd.extend(["-http_proxy", proxy_url])
+    cmd.extend([
         "-headers", headers_str,
         "-i", m3u8_url,
-    ]
+    ])
     if want_audio:
         cmd.extend(["-vn", "-c:a", "libmp3lame", "-b:a", "192k"])
     else:

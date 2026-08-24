@@ -69,7 +69,8 @@ API_ID=YOUR_API_ID
 API_HASH=YOUR_API_HASH
 BOT_TOKEN=YOUR_BOT_TOKEN
 
-# SOCKS5_PROXY=if_you_need_this_uncomment
+# RU_PROXY=socks5://user:password@ru-proxy-ip:port  # Proxy for Russian platforms (Rutube, VK, etc.)
+# SOCKS5_PROXY=socks5://user:password@ip:port        # General proxy
 
 DOWNLOAD_DIR=downloads
 MAX_FILE_SIZE_MB=2000

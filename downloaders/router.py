@@ -135,7 +135,7 @@ async def download(
                     from downloaders.core import _base_ydl_opts
                     loop = asyncio.get_event_loop()
                     ydl_opts_flat = {
-                        **_base_ydl_opts(),
+                        **_base_ydl_opts(url=url),
                         "extract_flat": True,
                         "noplaylist": False,
                     }

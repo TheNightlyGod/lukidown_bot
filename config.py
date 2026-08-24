@@ -16,6 +16,7 @@ class Config:
     API_HASH: str = field(default_factory=lambda: os.getenv("API_HASH", ""))
     BOT_TOKEN: str = field(default_factory=lambda: os.getenv("BOT_TOKEN", ""))
     SOCKS5_PROXY: str = field(default_factory=lambda: os.getenv("SOCKS5_PROXY", ""))
+    RU_PROXY: str = field(default_factory=lambda: os.getenv("RU_PROXY", os.getenv("RUSSIAN_PROXY", "")))
     DOWNLOAD_DIR: str = field(default_factory=lambda: os.getenv("DOWNLOAD_DIR", "downloads"))
     MAX_FILE_SIZE_MB: int = field(default_factory=lambda: int(os.getenv("MAX_FILE_SIZE_MB", "50")))
     DATABASE_URL: str = field(
