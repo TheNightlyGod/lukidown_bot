@@ -555,7 +555,21 @@ async def download_kinopoisk(
                         parts.append(current_out_time)
                     await on_progress(" / ".join(parts))
     finally:
-        await stderr_task
+        if proc.returncode is None:
+            try:
+                proc.kill()
+            except ProcessLookupError:
+                pass
+            try:
+                await proc.wait()
+            except Exception:
+                pass
+        if not stderr_task.done():
+            stderr_task.cancel()
+            try:
+                await stderr_task
+            except (asyncio.CancelledError, Exception):
+                pass
 
     rc = await proc.wait()
     if rc != 0:
