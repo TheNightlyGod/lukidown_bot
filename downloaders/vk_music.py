@@ -28,7 +28,7 @@ VK_USER_AGENT = (
 
 async def _vk_api_request(url: str, params: dict) -> dict:
     """Perform HTTP POST request to VK API and return parsed JSON."""
-    client = await get_http_client(enable_proxy=True)
+    client = await get_http_client(enable_proxy=True, is_ru=True)
     headers = {"User-Agent": VK_USER_AGENT}
     try:
         resp = await client.post(url, headers=headers, data=params, timeout=15.0)
