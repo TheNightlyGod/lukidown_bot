@@ -54,19 +54,20 @@ PLATFORM_PATTERNS: list[tuple[Platform, list[str]]] = [
         r"(?:https?://)?pin\.it/",
     ]),
     (Platform.RUTUBE, [
-        r"(?:https?://)?(?:www\.)?rutube\.ru/video/",
-        r"(?:https?://)?(?:www\.)?rutube\.ru/play/",
+        r"(?:https?://)?(?:www\.)?rutube\.ru/(?:video|play|shorts|channel|plst)/",
+        r"(?:https?://)?(?:www\.)?rutube\.ru/",
     ]),
     (Platform.VK_MUSIC, [
-        r"(?:https?://)?(?:www\.)?vk\.ru/audio-?\d+_\d+",
-        r"(?:https?://)?(?:www\.)?vk\.ru/music/album/",
-        r"(?:https?://)?(?:www\.)?vk\.ru/music/playlist/",
+        r"(?:https?://)?(?:(?:www|m)\.)?vk\.(?:ru|com)/audio-?\d+_\d+",
+        r"(?:https?://)?(?:(?:www|m)\.)?vk\.(?:ru|com)/music/album/",
+        r"(?:https?://)?(?:(?:www|m)\.)?vk\.(?:ru|com)/music/playlist/",
     ]),
     (Platform.VK, [
-        r"(?:https?://)?(?:www\.)?vk\.ru/video",
-        r"(?:https?://)?(?:www\.)?vk\.ru/clip",
-        r"(?:https?://)?(?:www\.)?vk\.ru/wall.*video",
-        r"(?:https?://)?vkvideo\.ru/",
+        r"(?:https?://)?(?:(?:www|m)\.)?vk\.(?:ru|com)/video",
+        r"(?:https?://)?(?:(?:www|m)\.)?vk\.(?:ru|com)/clip",
+        r"(?:https?://)?(?:(?:www|m)\.)?vk\.(?:ru|com)/wall.*video",
+        r"(?:https?://)?(?:www\.)?vkvideo\.ru/",
+        r"(?:https?://)?(?:(?:www|m)\.)?vk\.(?:ru|com)/.+[?&]z=video",
     ]),
     (Platform.SPOTIFY, [
         r"(?:https?://)?open\.spotify\.com/(?:track|album|playlist|artist)/",
@@ -112,7 +113,7 @@ PLATFORM_PATTERNS: list[tuple[Platform, list[str]]] = [
 
 URL_REGEX = re.compile(
     r"https?://[^\s<>\"{}|\\^`\[\]]+"
-    r"|(?:www\.|youtu\.be|vk\.ru|tiktok\.com|pin\.it)[^\s<>\"{}|\\^`\[\]]+"
+    r"|(?:www\.|youtu\.be|vk\.ru|vk\.com|vkvideo\.ru|rutube\.ru|tiktok\.com|pin\.it)[^\s<>\"{}|\\^`\[\]]+"
 )
 
 
@@ -148,3 +149,53 @@ def detect_platform(url: str) -> Platform:
             if re.search(pattern, url, re.IGNORECASE):
                 return platform
     return Platform.UNKNOWN
+
+
+def is_russian_platform(platform: Platform | None = None, url: str | None = None) -> bool:
+    """Check if the given platform or URL is a Russian service requiring RU proxy routing.
+
+    Args:
+        platform: Detected platform enum member or None.
+        url: Media URL or None.
+
+    Returns:
+        True if the service is a Russian platform (Rutube, VK, Yandex, Kinopoisk, etc.).
+    """
+    if platform in (
+        Platform.RUTUBE,
+        Platform.VK,
+        Platform.VK_MUSIC,
+        Platform.YANDEX,
+        Platform.KINOPOISK,
+    ):
+        return True
+
+    if url:
+        ru_domains = (
+            "rutube.ru",
+            "vk.com",
+            "vk.ru",
+            "vkvideo.ru",
+            "kinopoisk.ru",
+            "music.yandex.",
+            "yandex.",
+            "ya.ru",
+            "dzen.ru",
+            "ok.ru",
+            "mail.ru",
+        )
+        url_lower = url.lower()
+        if any(domain in url_lower for domain in ru_domains):
+            return True
+
+        detected = detect_platform(url)
+        if detected in (
+            Platform.RUTUBE,
+            Platform.VK,
+            Platform.VK_MUSIC,
+            Platform.YANDEX,
+            Platform.KINOPOISK,
+        ):
+            return True
+
+    return False
